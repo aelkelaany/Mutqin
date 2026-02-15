@@ -44,7 +44,7 @@ document.head.appendChild(mLink);
 // Service Worker (inline)
 if ('serviceWorker' in navigator) {
   const swCode = `
-    const CACHE = 'gt-v6';
+    const CACHE = 'gt-v7';
     const URLS = ['./', 'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js','https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js','https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css'];
     self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS)).then(() => self.skipWaiting())); });
     self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -161,10 +161,10 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .light .exp-tab{background:var(--bg3);border-color:var(--border)}
 .bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);z-index:40;padding:6px 8px;padding-bottom:max(6px,env(safe-area-inset-bottom));display:flex;justify-content:space-around}
 @media(min-width:768px){.bottom-nav{display:none}}
-.bnav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 8px;border-radius:14px;cursor:pointer;transition:all .2s;color:var(--text2);font-size:10px;font-weight:600;position:relative}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border-radius:14px;cursor:pointer;transition:all .2s;color:var(--text2);font-size:9px;font-weight:600;position:relative;min-width:0}
 .bnav-item.active{color:var(--coral)}
 .bnav-item.active::before{content:'';position:absolute;top:-6px;width:24px;height:3px;border-radius:0 0 4px 4px;background:var(--coral)}
-.bnav-item span:first-child{font-size:22px;line-height:1}
+.bnav-item span:first-child{font-size:20px;line-height:1}
 .dnav{display:none}@media(min-width:768px){.dnav{display:flex}}
 .dnav-item{padding:8px 18px;border-radius:14px;cursor:pointer;transition:all .25s;display:flex;align-items:center;gap:8px;color:var(--text2);font-weight:600;font-size:14px}
 .dnav-item:hover{background:var(--bg3);color:var(--text)}
@@ -932,71 +932,110 @@ return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{
 );}}/></div>)}</div>
 )}/></div>)}</div>))}</div>);}
 
-// ========== MEETINGS BROWSER ==========
-function MeetingsBrowser({meetings,language,onEdit,onDelete}){
+// ========== MEETINGS PAGE ==========
+function MeetingsPage({data,language,onAdd,onEdit,onDelete}){
   const[mSearch,setMSearch]=useState('');
   const[expanded,setExpanded]=useState(null);
+  const[tab,setTab]=useState('all');
+  const ts=localDS();
+
+  const allM=(data.meetings||[]).filter(m=>m.meetingDate).sort((a,b)=>new Date(b.meetingDate)-new Date(a.meetingDate));
+  const todayM=allM.filter(m=>m.meetingDate.startsWith(ts)).sort((a,b)=>new Date(a.meetingDate)-new Date(b.meetingDate));
+  const pastM=allM.filter(m=>m.meetingDate.slice(0,10)<ts);
+  const upcomingM=allM.filter(m=>m.meetingDate.slice(0,10)>ts).sort((a,b)=>new Date(a.meetingDate)-new Date(b.meetingDate));
+
+  const tabs=[
+    {id:'all',l:T('الكل','All',language),c:allM.length,color:'var(--pink)'},
+    {id:'today',l:T('اليوم','Today',language),c:todayM.length,color:'var(--coral)'},
+    {id:'upcoming',l:T('قادمة','Upcoming',language),c:upcomingM.length,color:'var(--teal)'},
+    {id:'past',l:T('سابقة','Past',language),c:pastM.length,color:'var(--text2)'}
+  ];
+
+  const currentList=tab==='today'?todayM:tab==='upcoming'?upcomingM:tab==='past'?pastM:allM;
 
   const filtered=useMemo(()=>{
-    if(!mSearch)return meetings;
+    if(!mSearch)return currentList;
     const q=mSearch.toLowerCase();
-    return meetings.filter(m=>(m.title||'').toLowerCase().includes(q)||(m.minutes||'').toLowerCase().includes(q)||(m.decisions||'').toLowerCase().includes(q)||(m.attendees||'').toLowerCase().includes(q)||(m.location||'').toLowerCase().includes(q));
-  },[meetings,mSearch]);
+    return currentList.filter(m=>(m.title||'').toLowerCase().includes(q)||(m.minutes||'').toLowerCase().includes(q)||(m.decisions||'').toLowerCase().includes(q)||(m.attendees||'').toLowerCase().includes(q)||(m.location||'').toLowerCase().includes(q));
+  },[currentList,mSearch]);
 
-  // Group by month
   const grouped=useMemo(()=>{
     const g={};
     filtered.forEach(m=>{const key=m.meetingDate.slice(0,7);if(!g[key])g[key]=[];g[key].push(m);});
-    return Object.entries(g).sort((a,b)=>b[0].localeCompare(a[0]));
-  },[filtered]);
+    const sorted=Object.entries(g);
+    if(tab==='upcoming')sorted.sort((a,b)=>a[0].localeCompare(b[0]));
+    else sorted.sort((a,b)=>b[0].localeCompare(a[0]));
+    return sorted;
+  },[filtered,tab]);
 
-  return(<div className="card" style={{padding:16}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:12}}>
-      <h3 style={{fontSize:15,fontWeight:800,color:'var(--pink)'}}>🗂️ {T('الاجتماعات السابقة','Past Meetings',language)} <span style={{fontSize:11,fontWeight:600,background:'var(--pink-g)',color:'var(--pink)',padding:'2px 8px',borderRadius:8}}>{meetings.length}</span></h3>
-    </div>
-    <div className="search-wrap" style={{marginBottom:12}}><span className="search-icon">🔍</span><input className="field" value={mSearch} onChange={e=>setMSearch(e.target.value)} placeholder={T('ابحث في الاجتماعات...','Search meetings...',language)} style={{paddingRight:language==='ar'?36:12,paddingLeft:language!=='ar'?36:12,fontSize:12}}/>{mSearch&&<span className="search-clear" onClick={()=>setMSearch('')}>✕</span>}</div>
-
-    {!filtered.length?<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>🫥 {T('لا نتائج','No results',language)}</p>:
-    grouped.map(([monthKey,monthMeetings])=>(<div key={monthKey}>
-      <div style={{fontSize:12,fontWeight:800,color:'var(--pink)',padding:'10px 0 6px',borderBottom:'2px solid var(--border)'}}>{new Date(monthKey+'-15').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'long',year:'numeric'})} ({monthMeetings.length})</div>
-      {monthMeetings.map(m=>{const isOpen=expanded===m.id;return(<div key={m.id} style={{borderBottom:'1px solid var(--border)'}}>
-        <div onClick={()=>setExpanded(isOpen?null:m.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 0',cursor:'pointer'}}>
-          <div style={{fontSize:18,width:36,height:36,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--pink-g)',borderRadius:10,flexShrink:0}}>{m.icon||'👥'}</div>
-          <div style={{flex:1,minWidth:0}}>
-            <div style={{fontWeight:700,fontSize:13}}>{m.title}</div>
-            <div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:6,flexWrap:'wrap',marginTop:2}}>
-              <span>📅 {new Date(m.meetingDate).toLocaleDateString(language==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',weekday:'short'})}</span>
-              <span>🕐 {new Date(m.meetingDate).toLocaleTimeString(language==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'})}</span>
-              {m.location&&<span>📍 {m.location}</span>}
-            </div>
+  const renderMeeting=(m)=>{
+    const isOpen=expanded===m.id;
+    const mDate=new Date(m.meetingDate);
+    const isToday=m.meetingDate.startsWith(ts);
+    const isPast=m.meetingDate.slice(0,10)<ts;
+    const hasMins=!!(m.minutes||m.decisions);
+    return(<div key={m.id} style={{borderBottom:'1px solid var(--border)'}}>
+      <div onClick={()=>setExpanded(isOpen?null:m.id)} style={{display:'flex',alignItems:'center',gap:10,padding:'12px 0',cursor:'pointer'}}>
+        <div style={{fontSize:20,width:40,height:40,display:'flex',alignItems:'center',justifyContent:'center',background:isToday?'var(--coral-g)':isPast?'var(--bg3)':'var(--teal-g)',borderRadius:10,flexShrink:0}}>{m.icon||'👥'}</div>
+        <div style={{flex:1,minWidth:0}}>
+          <div style={{fontWeight:700,fontSize:14,display:'flex',alignItems:'center',gap:6}}>
+            {m.title}
+            {isToday&&<span style={{fontSize:9,padding:'1px 6px',borderRadius:6,background:'var(--coral)',color:'white',fontWeight:700}}>{T('اليوم','TODAY',language)}</span>}
           </div>
-          <div style={{display:'flex',alignItems:'center',gap:4}}>
-            {(m.minutes||m.decisions)&&<span style={{fontSize:10,color:'var(--lime)'}}>📋</span>}
-            <span style={{fontSize:12,transition:'transform .2s',transform:isOpen?'rotate(180deg)':'rotate(0)',color:'var(--text2)'}}>▼</span>
+          <div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:6,flexWrap:'wrap',marginTop:3}}>
+            <span>📅 {mDate.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',weekday:'short'})}</span>
+            <span>🕐 {mDate.toLocaleTimeString(language==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'})}</span>
+            {m.location&&<span>📍 {m.location}</span>}
+            {m.attendees&&<span>👤 {m.attendees}</span>}
           </div>
         </div>
+        <div style={{display:'flex',alignItems:'center',gap:4,flexShrink:0}}>
+          {hasMins&&<span style={{fontSize:12,color:'var(--lime)'}}>📋</span>}
+          <span style={{fontSize:12,transition:'transform .2s',transform:isOpen?'rotate(180deg)':'rotate(0)',color:'var(--text2)'}}>▼</span>
+        </div>
+      </div>
 
-        {isOpen&&<div style={{padding:'0 0 14px 46px',display:'flex',flexDirection:'column',gap:8}}>
-          {m.description&&<div style={{fontSize:12,color:'var(--text2)'}}>{m.description}</div>}
-          {m.attendees&&<div style={{fontSize:12}}><span style={{fontWeight:700,color:'var(--text2)'}}>👤 {T('الحضور','Attendees',language)}:</span> {m.attendees}</div>}
-          {m.location&&<div style={{fontSize:12}}><span style={{fontWeight:700,color:'var(--text2)'}}>📍 {T('الموقع','Location',language)}:</span> {m.location}</div>}
-          {m.minutes&&<div className="note-box" style={{background:'var(--pink-g)',borderColor:'var(--pink)',whiteSpace:'pre-wrap',lineHeight:1.8}}>📋 <strong>{T('محضر الاجتماع','Meeting Minutes',language)}</strong>{'\n'}{m.minutes}</div>}
-          {m.decisions&&<div className="note-box" style={{background:'var(--lime-g)',borderColor:'var(--lime)',whiteSpace:'pre-wrap',lineHeight:1.8}}>✅ <strong>{T('القرارات والإجراءات','Decisions & Actions',language)}</strong>{'\n'}{m.decisions}</div>}
-          {m.notes&&<div className="note-box" style={{whiteSpace:'pre-wrap'}}>📝 {m.notes}</div>}
-          <div style={{display:'flex',gap:6,marginTop:4}}>
-            <button className="btn btn-ghost btn-xs" onClick={()=>onEdit('meeting',m)}>✏️ {T('تعديل','Edit',language)}</button>
-            <button className="btn btn-ghost btn-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('meetings',m.id,m.title)}>🗑️ {T('حذف','Delete',language)}</button>
-          </div>
-        </div>}
-      </div>);})}
-    </div>))}
+      {isOpen&&<div style={{padding:'0 0 14px 50px',display:'flex',flexDirection:'column',gap:8}}>
+        {m.description&&<div style={{fontSize:12,color:'var(--text2)',lineHeight:1.6}}>{m.description}</div>}
+        {m.attendees&&<div style={{fontSize:12}}><span style={{fontWeight:700,color:'var(--text2)'}}>👤 {T('الحضور','Attendees',language)}:</span> {m.attendees}</div>}
+        {m.location&&<div style={{fontSize:12}}><span style={{fontWeight:700,color:'var(--text2)'}}>📍 {T('الموقع','Location',language)}:</span> {m.location}</div>}
+        {m.minutes&&<div className="note-box" style={{background:'var(--pink-g)',borderColor:'var(--pink)',whiteSpace:'pre-wrap',lineHeight:1.8}}>📋 <strong>{T('محضر الاجتماع','Meeting Minutes',language)}</strong>{'\n'}{m.minutes}</div>}
+        {m.decisions&&<div className="note-box" style={{background:'var(--lime-g)',borderColor:'var(--lime)',whiteSpace:'pre-wrap',lineHeight:1.8}}>✅ <strong>{T('القرارات والإجراءات','Decisions & Actions',language)}</strong>{'\n'}{m.decisions}</div>}
+        {m.notes&&<div className="note-box" style={{whiteSpace:'pre-wrap'}}>📝 {m.notes}</div>}
+        <div style={{display:'flex',gap:6,marginTop:4}}>
+          <button className="btn btn-ghost btn-xs" onClick={()=>onEdit('meeting',m)}>✏️ {T('تعديل','Edit',language)}</button>
+          <button className="btn btn-ghost btn-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('meetings',m.id,m.title)}>🗑️ {T('حذف','Delete',language)}</button>
+        </div>
+      </div>}
+    </div>);
+  };
+
+  return(<div style={{display:'flex',flexDirection:'column',gap:14}}>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <h2 style={{fontSize:22,fontWeight:900}}>👥 {T('الاجتماعات','Meetings',language)}</h2>
+      <button className="btn btn-pink btn-sm" onClick={()=>onAdd('meeting')}>+ {T('اجتماع','Meeting',language)}</button>
+    </div>
+
+    <div style={{display:'flex',gap:6,overflowX:'auto',paddingBottom:4}}>
+      {tabs.map(t=>(<div key={t.id} className={`exp-tab ${tab===t.id?'active':''}`} onClick={()=>setTab(t.id)} style={tab===t.id?{borderColor:t.color,color:t.color}:{}}>{t.l} <span style={{fontSize:10,fontWeight:700,opacity:.7}}>({t.c})</span></div>))}
+    </div>
+
+    <div className="search-wrap"><span className="search-icon">🔍</span><input className="field" value={mSearch} onChange={e=>setMSearch(e.target.value)} placeholder={T('ابحث في الاجتماعات...','Search meetings...',language)} style={{paddingRight:language==='ar'?36:12,paddingLeft:language!=='ar'?36:12,fontSize:12}}/>{mSearch&&<span className="search-clear" onClick={()=>setMSearch('')}>✕</span>}</div>
+
+    {!filtered.length?<div style={{textAlign:'center',padding:40,color:'var(--text2)'}}><div style={{fontSize:48}}>👥</div><p style={{fontSize:14,marginTop:8}}>{tab==='today'?T('لا اجتماعات اليوم','No meetings today',language):T('لا اجتماعات','No meetings',language)}</p></div>:
+    <div className="card" style={{padding:14}}>
+      {grouped.map(([monthKey,monthMeetings])=>(<div key={monthKey}>
+        <div style={{fontSize:12,fontWeight:800,color:'var(--pink)',padding:'10px 0 6px',borderBottom:'2px solid var(--border)'}}>{new Date(monthKey+'-15').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'long',year:'numeric'})} ({monthMeetings.length})</div>
+        {monthMeetings.map(renderMeeting)}
+      </div>))}
+    </div>}
   </div>);
 }
 
 function Today({data,language,onAdd,onEdit,onDelete,onStatus,onSaveList,onDeleteList}){const[ni,setNi]=useState({});const ts=localDS();const tT=(data.tasks||[]).filter(t=>t.dueDate&&t.dueDate.startsWith(ts));const tQ=(data.quickTasks||[]).filter(t=>t.dueDate&&t.dueDate.startsWith(ts));const tM=(data.meetings||[]).filter(m=>m.meetingDate&&m.meetingDate.startsWith(ts)).sort((a,b)=>new Date(a.meetingDate)-new Date(b.meetingDate));const sc={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text2)'};const sl={complete:T('مكتمل','Done',language),inProgress:T('جارٍ','Active',language),partial:T('جزئي','Partial',language),notStarted:T('لم يبدأ','Todo',language)};const pc={high:'var(--coral)',medium:'var(--gold)',low:'var(--lime)'};const n3={notStarted:'inProgress',inProgress:'complete',complete:'notStarted'};const n4={notStarted:'inProgress',inProgress:'partial',partial:'complete',complete:'notStarted'};const all=[...tT.map(t=>({...t,_s:'tasks',_ns:n4})),...tQ.map(t=>({...t,_s:'quickTasks',_ns:n3}))];const tLI=async(l,iid)=>{await onSaveList({...l,items:l.items.map(i=>i.id===iid?{...i,checked:!i.checked}:i)});};const aLI=async(l,title)=>{if(!title.trim())return;await onSaveList({...l,items:[...l.items,{id:uid(),title:title.trim(),checked:false,createdAt:new Date().toISOString()}]});setNi({...ni,[l.id]:''});};const rLI=async(l,iid)=>{await onSaveList({...l,items:l.items.filter(i=>i.id!==iid)});};const lP=l=>{if(!l.items||!l.items.length)return 0;return l.items.filter(i=>i.checked).length/l.items.length*100;};
 return(<div style={{display:'flex',flexDirection:'column',gap:16}}><h2 style={{fontSize:22,fontWeight:900}}>🔥 {T('اليوم','Today',language)}</h2>
 <div className="card" style={{padding:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--pink)'}}>👥 {T('الاجتماعات','Meetings',language)}</h3><button className="btn btn-pink btn-xs" onClick={()=>onAdd('meeting')}>⚡ {T('جديد','New',language)}</button></div>{!tM.length?(<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>😌 {T('لا اجتماعات','No meetings',language)}</p>):tM.map(m=>(<div key={m.id} style={{display:'flex',alignItems:'flex-start',gap:12,padding:'12px 0',borderBottom:'1px solid var(--border)'}}><div style={{fontSize:28,width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--pink-g)',borderRadius:12,flexShrink:0}}>{m.icon||'👥'}</div><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14}}>{m.title}</div><div style={{fontSize:12,color:'var(--text2)',display:'flex',gap:8,flexWrap:'wrap',marginTop:3}}>{m.meetingDate&&<span>🕐 {new Date(m.meetingDate).toLocaleTimeString(language==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'})}</span>}{m.location&&<span>📍 {m.location}</span>}{m.attendees&&<span>👤 {m.attendees}</span>}</div>{m.minutes&&<div className="note-box" style={{background:'var(--pink-g)',borderColor:'var(--pink)'}}>📋 <strong>{T('المحضر','Minutes',language)}:</strong> {m.minutes.length>120?m.minutes.slice(0,120)+'...':m.minutes}</div>}{m.decisions&&<div className="note-box" style={{background:'var(--lime-g)',borderColor:'var(--lime)'}}>✅ <strong>{T('القرارات','Decisions',language)}:</strong> {m.decisions.length>80?m.decisions.slice(0,80)+'...':m.decisions}</div>}{m.notes&&!m.minutes&&<div className="note-box">📝 {m.notes.length>60?m.notes.slice(0,60)+'...':m.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('meeting',m)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('meetings',m.id,m.title)}>🗑️</button></div></div>))}</div>
-{(()=>{const allM=(data.meetings||[]).filter(m=>m.meetingDate&&!m.meetingDate.startsWith(ts)).sort((a,b)=>new Date(b.meetingDate)-new Date(a.meetingDate));if(!allM.length)return null;return(<MeetingsBrowser meetings={allM} language={language} onEdit={onEdit} onDelete={onDelete}/>);})()}
+{/* Meetings moved to dedicated tab */}
 <div className="card" style={{padding:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--teal)'}}>✅ {T('المهام','Tasks',language)} <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>({all.filter(t=>t.status==='complete').length}/{all.length})</span></h3><button className="btn btn-teal btn-xs" onClick={()=>onAdd('quickTask')}>⚡ {T('مهمة','Task',language)}</button></div>{!all.length?(<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>🎉 {T('لا مهام','No tasks',language)}</p>):all.map(tk=>(<div key={tk.id} style={{display:'flex',alignItems:'center',gap:8,padding:'10px 0',borderBottom:'1px solid var(--border)'}}><div onClick={()=>onStatus(tk._s,tk,tk._ns[tk.status])} style={{width:26,height:26,borderRadius:8,border:`2px solid ${sc[tk.status]}`,background:tk.status==='complete'?sc.complete:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0}}>{tk.status==='complete'&&'✓'}</div><span style={{fontSize:18}}>{tk.icon||'✅'}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span>{tk.priority&&<span className="badge" style={{background:`${pc[tk.priority]||'var(--text2)'}22`,color:pc[tk.priority]||'var(--text2)'}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>}{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>60?tk.notes.slice(0,60)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit(tk._s==='tasks'?'task':'quickTask',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete(tk._s,tk.id,tk.title)}>🗑️</button></div></div>))}</div>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--gold)'}}>📋 {T('القوائم','Lists',language)}</h3><button className="btn btn-gold btn-xs" onClick={()=>onAdd('taskList')}>⚡ {T('قائمة','List',language)}</button></div>
 {!(data.taskLists||[]).length?(<div className="card" style={{padding:30,textAlign:'center'}}><div style={{fontSize:40,marginBottom:8}}>📝</div><p style={{color:'var(--text2)',fontSize:13}}>{T('أنشئ قائمتك الأولى!','Create your first list!',language)}</p></div>):(data.taskLists||[]).map(list=>(<div key={list.id} className="card" style={{padding:14,borderRight:language==='ar'?`3px solid ${list.color}`:'none',borderLeft:language!=='ar'?`3px solid ${list.color}`:'none'}}><div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}><div style={{fontSize:24,width:40,height:40,display:'flex',alignItems:'center',justifyContent:'center',background:`${list.color}22`,borderRadius:10,flexShrink:0}}>{list.icon}</div><div style={{flex:1}}><div style={{fontWeight:800,fontSize:14}}>{list.name}</div><div style={{fontSize:11,color:'var(--text2)',fontWeight:600}}>{list.items?.length||0} {T('عناصر','items',language)} · {Math.round(lP(list))}%</div></div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('taskList',list)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDeleteList(list)}>🗑️</button></div></div><div style={{height:4,background:'var(--border)',borderRadius:4,marginBottom:10,overflow:'hidden'}}><div style={{height:'100%',width:`${lP(list)}%`,background:`linear-gradient(90deg,${list.color},${list.color}88)`,borderRadius:4,transition:'width .5s'}}/></div>{(list.items||[]).map(it=>(<div key={it.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}><div onClick={()=>tLI(list,it.id)} style={{width:22,height:22,borderRadius:6,border:`2px solid ${it.checked?'var(--lime)':'var(--border)'}`,background:it.checked?'var(--lime)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{it.checked&&'✓'}</div><span style={{flex:1,fontSize:13,fontWeight:500,textDecoration:it.checked?'line-through':'none',opacity:it.checked?.4:1}}>{it.title}</span><button className="btn btn-ghost btn-icon-xs" style={{width:22,height:22,fontSize:10}} onClick={()=>rLI(list,it.id)}>✕</button></div>))}<div style={{display:'flex',gap:8,marginTop:8}}><input className="field" style={{fontSize:13,padding:'8px 12px'}} value={ni[list.id]||''} onChange={e=>setNi({...ni,[list.id]:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')aLI(list,ni[list.id]||'');}} placeholder={T('عنصر جديد...','New item...',language)}/><button className="btn btn-teal btn-sm" onClick={()=>aLI(list,ni[list.id]||'')}>+</button></div></div>))}</div>);}
@@ -1651,7 +1690,7 @@ function App(){
   const handleSaveNote=useCallback(async(n)=>{await dPut('notes',n);await load();toast(T('تم حفظ الملاحظة 📓','Note saved 📓',lang));},[load,toast,lang]);
   const handleDeleteNote=useCallback((n)=>{setConfirm({message:T(`حذف "${n.title||'ملاحظة'}"؟`,`Delete "${n.title||'note'}"?`,lang),onOk:async()=>{await dDel('notes',n.id);await load();toast(T('تم الحذف','Deleted',lang));setConfirm(null);}});},[lang,load,toast]);
 
-  const navs=[{id:'dashboard',icon:'🎯',label:T('الأهداف','Goals',lang)},{id:'today',icon:'🔥',label:T('اليوم','Today',lang)},{id:'expenses',icon:'💰',label:T('المصاريف','Expenses',lang)},{id:'notes',icon:'📓',label:T('مفكرتي','Notes',lang)},{id:'timeline',icon:'📊',label:T('الجدول','Timeline',lang)}];
+  const navs=[{id:'dashboard',icon:'🎯',label:T('الأهداف','Goals',lang)},{id:'today',icon:'🔥',label:T('اليوم','Today',lang)},{id:'meetings',icon:'👥',label:T('اجتماعات','Meetings',lang)},{id:'expenses',icon:'💰',label:T('المصاريف','Expenses',lang)},{id:'notes',icon:'📓',label:T('مفكرتي','Notes',lang)},{id:'timeline',icon:'📊',label:T('الجدول','Timeline',lang)}];
   return(
     <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column',position:'relative',zIndex:1}}>
       <header style={{background:'var(--bg2)',borderBottom:'1px solid var(--border)',padding:'10px 14px',position:'sticky',top:0,zIndex:40,backdropFilter:'blur(12px)'}}>
@@ -1676,9 +1715,10 @@ function App(){
             <div style={{flex:1,overflowY:'auto',overflowX:'hidden',background:'var(--bg)'}}>
               <div style={{padding:'36px 10px 90px',maxWidth:'100%'}}>
                 <BackupBar language={lang} onExport={handleExport}/>
-                {view!=='timeline'&&view!=='expenses'&&view!=='notes'&&<div style={{marginBottom:16}}><Cal language={lang} data={data} onDayClick={handleDayClick}/></div>}
+                {view!=='timeline'&&view!=='expenses'&&view!=='notes'&&view!=='meetings'&&<div style={{marginBottom:16}}><Cal language={lang} data={data} onDayClick={handleDayClick}/></div>}
                 {view==='dashboard'&&<><StatsBar data={data} language={lang}/><WeeklyChart data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter}/></>}
                 {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList}/>}
+                {view==='meetings'&&<MeetingsPage data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete}/>}
                 {view==='expenses'&&<Expenses data={data} language={lang} onSaveExpense={handleSaveExpense} onDeleteExpense={handleDeleteExpense} onSaveCategory={handleSaveCategory} onDeleteCategory={handleDeleteCategory} onSaveBudget={handleSaveBudget} onDeleteBudget={handleDeleteBudget} toast={toast}/>}
                 {view==='notes'&&<Notes data={data} language={lang} onSaveNote={handleSaveNote} onDeleteNote={handleDeleteNote} toast={toast}/>}
                 {view==='timeline'&&<Timeline data={data} language={lang}/>}
@@ -1702,6 +1742,8 @@ function App(){
                   {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList}/>}
                 </div>
               </div>
+            ):view==='meetings'?(
+              <MeetingsPage data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete}/>
             ):view==='expenses'?(
               <Expenses data={data} language={lang} onSaveExpense={handleSaveExpense} onDeleteExpense={handleDeleteExpense} onSaveCategory={handleSaveCategory} onDeleteCategory={handleDeleteCategory} onSaveBudget={handleSaveBudget} onDeleteBudget={handleDeleteBudget} toast={toast}/>
             ):view==='notes'?(
