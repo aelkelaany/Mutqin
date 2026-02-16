@@ -44,11 +44,11 @@ document.head.appendChild(mLink);
 // Service Worker (inline)
 if ('serviceWorker' in navigator) {
   const swCode = `
-    const CACHE = 'gt-v10';
+    const CACHE = 'gt-v11';
     const URLS = ['./', 'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js','https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js','https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css'];
     self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS)).then(() => self.skipWaiting())); });
     self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
-    self.addEventListener('fetch', e => { const url = e.request.url; if (url.includes('er-api.com') || url.includes('frankfurter') || url.includes('exchangerate') || url.includes('metals.dev') || url.includes('open-meteo.com')) { return; } e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => { if (res.ok) { const cl = res.clone(); caches.open(CACHE).then(c => c.put(e.request, cl)); } return res; }).catch(() => caches.match('./')))); });
+    self.addEventListener('fetch', e => { const url = e.request.url; if (url.includes('er-api.com') || url.includes('frankfurter') || url.includes('exchangerate') || url.includes('open-meteo.com')) { return; } e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => { if (res.ok) { const cl = res.clone(); caches.open(CACHE).then(c => c.put(e.request, cl)); } return res; }).catch(() => caches.match('./')))); });
   `;
   const swBlob = new Blob([swCode], {type: 'application/javascript'});
   const swUrl = URL.createObjectURL(swBlob);
@@ -57,14 +57,14 @@ if ('serviceWorker' in navigator) {
 </script>
 <style>
 :root{--coral:#FF6B6B;--coral-g:#FF6B6B44;--teal:#00D2D3;--teal-g:#00D2D344;--gold:#FECA57;--gold-g:#FECA5744;--pink:#FF9FF3;--pink-g:#FF9FF344;--lime:#55E6C1;--lime-g:#55E6C144;--electric:#5F7FFF;--electric-g:#5F7FFF44;--bg:#0B0E17;--bg2:#111627;--bg3:#182036;--text:#F0F2F8;--text2:#8892B0;--border:#1E2744;--bh:#2A3660}
-.light{--bg:#E4E7EF;--bg2:#ECEEF5;--bg3:#D6DAE6;--text:#1A202C;--text2:#5A6478;--border:#B8C1D0;--bh:#A0AABB;--coral:#C43838;--coral-g:#C4383818;--teal:#007A7A;--teal-g:#007A7A18;--gold:#A07E0D;--gold-g:#A07E0D18;--pink:#A44E9C;--pink-g:#A44E9C18;--lime:#1A8259;--lime-g:#1A825918;--electric:#3550B5;--electric-g:#3550B518}
+.light{--bg:#F0F1F6;--bg2:#F8F8FB;--bg3:#E5E7EE;--text:#1A202C;--text2:#6B7280;--border:#D1D5DE;--bh:#B0B7C4;--coral:#E04848;--coral-g:#E0484815;--teal:#0A9396;--teal-g:#0A939615;--gold:#C4920A;--gold-g:#C4920A15;--pink:#C054B5;--pink-g:#C054B515;--lime:#22A06B;--lime-g:#22A06B15;--electric:#4C6EF5;--electric-g:#4C6EF515}
 .light body,.light .bottom-nav,.light header{background:var(--bg2)}
-.light body::before{background:none}
+.light body::before{background:radial-gradient(ellipse 600px 400px at 10% 20%,#E0484805 0%,transparent 70%),radial-gradient(ellipse 500px 500px at 90% 80%,#0A939605 0%,transparent 70%)}
 .light .btn-ghost{background:var(--bg3);color:var(--text2);border-color:var(--border)}
-.light .field{background:var(--bg3);border-color:var(--border);color:var(--text)}
+.light .field{background:var(--bg);border-color:var(--border);color:var(--text)}
 .light .modal{background:var(--bg2);border-color:var(--border)}
-.light .overlay{background:rgba(0,0,0,.35)}
-.light .card{box-shadow:0 1px 4px rgba(0,0,0,.05);border:1px solid var(--border)}
+.light .overlay{background:rgba(0,0,0,.3)}
+.light .card{box-shadow:0 1px 8px rgba(0,0,0,.06);border:1px solid var(--border)}
 .light .drop-zone{border-color:var(--border)}
 .light .stat-chip{background:var(--bg3)}
 .light ::-webkit-scrollbar-thumb{background:var(--border)}
@@ -529,15 +529,8 @@ function InfoBar({language}){
   const fetchInfo=useCallback(async()=>{
     setLoading(true);
     const result={...info,updated:new Date().toISOString()};
-    try{
-      const gRes=await fetch('https://api.metals.dev/v1/latest?api_key=demo&currency=SAR&unit=gram');
-      const gData=await gRes.json();
-      if(gData.metals){
-        result.goldGram=Math.round(gData.metals.gold||0);
-        result.goldOz=Math.round((gData.metals.gold||0)*31.1035);
-        result.silverGram=Math.round((gData.metals.silver||0)*100)/100;
-      }
-    }catch(e){console.warn('Gold fetch error:',e);}
+    // Gold price - use cached value or default (no reliable free CORS-enabled API)
+    if(!result.goldGram){result.goldGram=310;result.goldOz=9650;result.silverGram=3.5;}
     try{
       const wRes=await fetch('https://api.open-meteo.com/v1/forecast?latitude=24.7136&longitude=46.6753&current_weather=true&timezone=Asia/Riyadh');
       const wData=await wRes.json();
@@ -1689,46 +1682,31 @@ function Timeline({data,language}){const[tlSort,setTlSort]=useState('asc');const
 return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2 style={{fontSize:22,fontWeight:900}}>📊 {T('الجدول الزمني','Timeline',language)}</h2><SortBtn sort={tlSort} onToggle={()=>setTlSort(s=>s==='asc'?'desc':'asc')} language={language}/></div>{!items.length?(<div className="card" style={{padding:50,textAlign:'center'}}><div style={{fontSize:56,marginBottom:16}}>⏳</div><p style={{color:'var(--text2)',fontWeight:600}}>{T('لا توجد عناصر','No items',language)}</p></div>):(<div style={{position:'relative',paddingRight:language==='ar'?28:0,paddingLeft:language!=='ar'?28:0}}><div style={{position:'absolute',top:0,bottom:0,width:3,background:'linear-gradient(180deg,var(--coral),var(--teal),var(--gold))',borderRadius:4,right:language==='ar'?11:'auto',left:language!=='ar'?11:'auto'}}/>{items.map((it,i)=>{const ds=it._date.split('T')[0],past=ds<tStr,isT=ds===tStr;const info=lb[it._type];const clr=it._c;return(<div key={i} style={{position:'relative',marginBottom:14,opacity:past?.5:1}}><div style={{position:'absolute',width:14,height:14,borderRadius:'50%',background:isT?'#FECA57':clr,right:language==='ar'?5:'auto',left:language!=='ar'?5:'auto',top:18,border:'3px solid var(--bg2)',zIndex:1,boxShadow:isT?'0 0 10px var(--gold-g)':'none'}}/><div className="card" style={{marginRight:language==='ar'?22:0,marginLeft:language!=='ar'?22:0,padding:14}}><div style={{display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:24}}>{it.icon||info.i}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14}}>{it.title}</div><div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:4,alignItems:'center'}}><span className="badge" style={{background:`${clr}22`,color:clr}}>{info.i} {info.l}</span><span style={{fontSize:11,color:'var(--text2)',fontWeight:600}}>{new Date(it._date).toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'short',day:'numeric',year:'numeric'})}</span>{it._type==='meet'&&it.location&&<span style={{fontSize:11,color:'var(--text2)'}}>📍 {it.location}</span>}</div></div>{isT&&<span className="badge" style={{background:'var(--gold-g)',color:'var(--gold)',animation:'pulse 2s infinite'}}>🔥 {T('اليوم','Today',language)}</span>}</div></div></div>);})}</div>)}</div>);}
 
 // ========== APP ==========
-// ========== LIVE WIDGET (Gold + Weather) ==========
+// ========== LIVE WIDGET (Weather) ==========
 function LiveWidget({language}){
-  const[goldSAR,setGoldSAR]=useState(null);
   const[temp,setTemp]=useState(null);
   const[city,setCity]=useState(null);
 
   useEffect(()=>{
-    // Gold price in SAR
-    const fetchGold=async()=>{try{
-      const r=await fetch('https://api.metals.dev/v1/latest?api_key=demo&currency=SAR&unit=toz');
-      const d=await r.json();
-      if(d&&d.metals){setGoldSAR(Math.round(d.metals.gold||0));}
-    }catch(e){console.warn('Gold API error:',e);}};
-
-    // Weather - try geolocation first, fallback to Riyadh
     const fetchWeather=async(lat,lon,cityName)=>{try{
       const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code`);
       const d=await r.json();
       if(d&&d.current){setTemp(Math.round(d.current.temperature_2m));setCity(cityName);}
     }catch(e){console.warn('Weather API error:',e);}};
 
-    fetchGold();
     if('geolocation' in navigator){
       navigator.geolocation.getCurrentPosition(
         pos=>fetchWeather(pos.coords.latitude,pos.coords.longitude,T('موقعك','Your Location',language)),
         ()=>fetchWeather(24.7136,46.6753,T('الرياض','Riyadh',language))
       );
     }else{fetchWeather(24.7136,46.6753,T('الرياض','Riyadh',language));}
-
-    // Refresh every 15 min
-    const iv=setInterval(fetchGold,15*60*1000);
-    return()=>clearInterval(iv);
   },[language]);
 
-  if(!goldSAR&&temp===null)return null;
+  if(temp===null)return null;
 
   const weatherIcon=(t)=>{if(t===null)return'';if(t>=40)return'🔥';if(t>=30)return'☀️';if(t>=20)return'🌤️';if(t>=10)return'⛅';if(t>=0)return'🌥️';return'❄️';};
 
-  return(<div style={{display:'flex',gap:8,alignItems:'center',fontSize:10,color:'var(--text2)',fontWeight:600,flexWrap:'wrap'}}>
-    {goldSAR&&<span title={T('سعر أونصة الذهب بالريال','Gold oz price in SAR',language)} style={{display:'flex',alignItems:'center',gap:3,background:'var(--gold-g)',color:'var(--gold)',padding:'2px 8px',borderRadius:8,cursor:'default'}}>🥇 {goldSAR.toLocaleString()} SAR</span>}
+  return(<div style={{display:'flex',gap:8,alignItems:'center',fontSize:10,color:'var(--text2)',fontWeight:600}}>
     {temp!==null&&<span title={city||''} style={{display:'flex',alignItems:'center',gap:3,background:'var(--teal-g)',color:'var(--teal)',padding:'2px 8px',borderRadius:8,cursor:'default'}}>{weatherIcon(temp)} {temp}°C</span>}
   </div>);
 }
@@ -1866,7 +1844,7 @@ function App(){
               <Notes data={data} language={lang} isDark={theme==='dark'} onSaveNote={handleSaveNote} onDeleteNote={handleDeleteNote} toast={toast}/>
             ):(
               <Timeline data={data} language={lang}/>
-            )}}
+            )}
           </main>
           <div className="bottom-nav">{navs.map(n=>(<div key={n.id} className={`bnav-item ${view===n.id?'active':''}`} onClick={()=>setView(n.id)}><span>{n.icon}</span><span>{n.label}</span></div>))}</div>
         </>
