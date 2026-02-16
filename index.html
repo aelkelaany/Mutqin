@@ -44,7 +44,7 @@ document.head.appendChild(mLink);
 // Service Worker (inline)
 if ('serviceWorker' in navigator) {
   const swCode = `
-    const CACHE = 'gt-v11';
+    const CACHE = 'gt-v12';
     const URLS = ['./', 'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js','https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js','https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css'];
     self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS)).then(() => self.skipWaiting())); });
     self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -57,14 +57,14 @@ if ('serviceWorker' in navigator) {
 </script>
 <style>
 :root{--coral:#FF6B6B;--coral-g:#FF6B6B44;--teal:#00D2D3;--teal-g:#00D2D344;--gold:#FECA57;--gold-g:#FECA5744;--pink:#FF9FF3;--pink-g:#FF9FF344;--lime:#55E6C1;--lime-g:#55E6C144;--electric:#5F7FFF;--electric-g:#5F7FFF44;--bg:#0B0E17;--bg2:#111627;--bg3:#182036;--text:#F0F2F8;--text2:#8892B0;--border:#1E2744;--bh:#2A3660}
-.light{--bg:#F0F1F6;--bg2:#F8F8FB;--bg3:#E5E7EE;--text:#1A202C;--text2:#6B7280;--border:#D1D5DE;--bh:#B0B7C4;--coral:#E04848;--coral-g:#E0484815;--teal:#0A9396;--teal-g:#0A939615;--gold:#C4920A;--gold-g:#C4920A15;--pink:#C054B5;--pink-g:#C054B515;--lime:#22A06B;--lime-g:#22A06B15;--electric:#4C6EF5;--electric-g:#4C6EF515}
-.light body,.light .bottom-nav,.light header{background:var(--bg2)}
-.light body::before{background:radial-gradient(ellipse 600px 400px at 10% 20%,#E0484805 0%,transparent 70%),radial-gradient(ellipse 500px 500px at 90% 80%,#0A939605 0%,transparent 70%)}
+.light{--bg:#F1F2F7;--bg2:#FFFFFF;--bg3:#E8EAF0;--text:#1A202C;--text2:#5F6B7A;--border:#D4D8E1;--bh:#B0B7C4;--coral:#E04848;--coral-g:#E0484812;--teal:#0A9396;--teal-g:#0A939612;--gold:#C4920A;--gold-g:#C4920A12;--pink:#C054B5;--pink-g:#C054B512;--lime:#22A06B;--lime-g:#22A06B12;--electric:#4C6EF5;--electric-g:#4C6EF512}
+.light body,.light .bottom-nav,.light header{background:#ECEEF4}
+.light body::before{background:none}
 .light .btn-ghost{background:var(--bg3);color:var(--text2);border-color:var(--border)}
-.light .field{background:var(--bg);border-color:var(--border);color:var(--text)}
-.light .modal{background:var(--bg2);border-color:var(--border)}
+.light .field{background:#F1F2F7;border-color:var(--border);color:var(--text)}
+.light .modal{background:#FFFFFF;border-color:var(--border)}
 .light .overlay{background:rgba(0,0,0,.3)}
-.light .card{box-shadow:0 1px 8px rgba(0,0,0,.06);border:1px solid var(--border)}
+.light .card{box-shadow:0 2px 8px rgba(0,0,0,.07);background:#FFFFFF;border:1px solid var(--border)}
 .light .drop-zone{border-color:var(--border)}
 .light .stat-chip{background:var(--bg3)}
 .light ::-webkit-scrollbar-thumb{background:var(--border)}
@@ -79,9 +79,9 @@ if ('serviceWorker' in navigator) {
 .light .sort-btn{background:var(--bg3);border-color:var(--border)}
 .light .backup-bar{background:#FECA5718;border-color:#F6B93B}
 .light .exp-tab.active{background:var(--bg3);border-color:var(--text2)}
-.light .exp-summary-card,.light .exp-budget-card{background:var(--bg);border-color:var(--border)}
+.light .exp-summary-card,.light .exp-budget-card{background:#FFFFFF;border-color:var(--border)}
 .light .bnav-item.active{color:var(--coral)}
-.light .bottom-nav{border-top:1px solid var(--border);background:var(--bg2)}
+.light .bottom-nav{border-top:1px solid var(--border);background:#F5F6FA}
 .light .cal-cell{border:1px solid transparent}
 .light .cal-cell:hover{background:var(--bg3)}
 .light .drag-ghost{background:var(--bg2);border-color:var(--teal);box-shadow:0 12px 40px rgba(0,0,0,.1)}
@@ -521,51 +521,6 @@ function SearchFilter({language,search,onSearch,filter,onFilter}){
 }
 
 // ========== BACKUP REMINDER ==========
-// ========== INFO BAR (Gold + Weather) ==========
-function InfoBar({language}){
-  const[info,setInfo]=useState(()=>{try{return JSON.parse(localStorage.getItem('gt-infobar'))||{};}catch(e){return{};}});
-  const[loading,setLoading]=useState(false);
-
-  const fetchInfo=useCallback(async()=>{
-    setLoading(true);
-    const result={...info,updated:new Date().toISOString()};
-    // Gold price - use cached value or default (no reliable free CORS-enabled API)
-    if(!result.goldGram){result.goldGram=310;result.goldOz=9650;result.silverGram=3.5;}
-    try{
-      const wRes=await fetch('https://api.open-meteo.com/v1/forecast?latitude=24.7136&longitude=46.6753&current_weather=true&timezone=Asia/Riyadh');
-      const wData=await wRes.json();
-      if(wData.current_weather){
-        result.temp=Math.round(wData.current_weather.temperature);
-        result.windSpeed=Math.round(wData.current_weather.windspeed);
-        const wc=wData.current_weather.weathercode;
-        result.weatherIcon=wc===0?'☀️':wc<=3?'⛅':wc<=48?'🌫️':wc<=67?'🌧️':wc<=77?'❄️':wc<=82?'🌧️':'⛈️';
-      }
-    }catch(e){console.warn('Weather fetch error:',e);}
-    localStorage.setItem('gt-infobar',JSON.stringify(result));
-    setInfo(result);
-    setLoading(false);
-  },[info]);
-
-  useEffect(()=>{
-    const last=info.updated?new Date(info.updated):null;
-    const now=new Date();
-    if(!last||now-last>30*60*1000)fetchInfo();
-  },[]);
-
-  if(!info.goldGram&&!info.temp)return null;
-  const ago=info.updated?Math.round((new Date()-new Date(info.updated))/60000):0;
-
-  return(<div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'8px 12px',background:'var(--bg3)',borderRadius:12,fontSize:11,color:'var(--text2)'}}>
-    {info.goldGram&&<span style={{display:'flex',alignItems:'center',gap:3}}>🥇 <strong style={{color:'var(--gold)'}}>{info.goldGram}</strong> {T('ر.س/جرام','SAR/g',language)}</span>}
-    {info.goldOz&&<span style={{opacity:.5}}>|</span>}
-    {info.goldOz&&<span>🏆 {info.goldOz.toLocaleString()} {T('ر.س/أونصة','SAR/oz',language)}</span>}
-    {info.temp!==undefined&&<span style={{opacity:.5}}>|</span>}
-    {info.temp!==undefined&&<span>{info.weatherIcon} <strong>{info.temp}°C</strong> {T('الرياض','Riyadh',language)}</span>}
-    <button onClick={fetchInfo} style={{marginRight:'auto',marginLeft:'auto',background:'none',border:'none',cursor:'pointer',fontSize:11,color:'var(--text2)',padding:0}} title={T('تحديث','Refresh',language)}>{loading?'⏳':'🔄'}</button>
-    {ago>0&&<span style={{fontSize:9,opacity:.5}}>{ago<60?`${ago}${T('د','m',language)}`:Math.round(ago/60)+T('س','h',language)}</span>}
-  </div>);
-}
-
 function BackupBar({language,onExport}){
   const lastExport=localStorage.getItem('gt-last-export');
   const daysSince=lastExport?Math.floor((Date.now()-new Date(lastExport).getTime())/(86400000)):999;
@@ -1807,7 +1762,6 @@ function App(){
             <div style={{flex:1,overflowY:'auto',overflowX:'hidden',background:'var(--bg)'}}>
               <div style={{padding:'36px 10px 90px',maxWidth:'100%'}}>
                 <BackupBar language={lang} onExport={handleExport}/>
-                <InfoBar language={lang}/>
                 {view!=='timeline'&&view!=='expenses'&&view!=='notes'&&view!=='meetings'&&<div style={{marginBottom:16}}><Cal language={lang} data={data} onDayClick={handleDayClick}/></div>}
                 {view==='dashboard'&&<><StatsBar data={data} language={lang}/><WeeklyChart data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter}/></>}
                 {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList}/>}
@@ -1824,7 +1778,6 @@ function App(){
         <>
           <main className="desktop-layout" style={{flex:1,maxWidth:860,margin:'0 auto',width:'100%',padding:'16px 12px 100px'}}>
             <BackupBar language={lang} onExport={handleExport}/>
-            <InfoBar language={lang}/>
             {view==='dashboard'||view==='today'?(
               <div className="desk-split">
                 <div className="cal-col">
