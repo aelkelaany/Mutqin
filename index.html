@@ -44,11 +44,11 @@ document.head.appendChild(mLink);
 // Service Worker (inline)
 if ('serviceWorker' in navigator) {
   const swCode = `
-    const CACHE = 'gt-v9';
+    const CACHE = 'gt-v10';
     const URLS = ['./', 'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js','https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js','https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css'];
     self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS)).then(() => self.skipWaiting())); });
     self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
-    self.addEventListener('fetch', e => { const url = e.request.url; if (url.includes('er-api.com') || url.includes('frankfurter') || url.includes('exchangerate') || url.includes('goldprice.org') || url.includes('open-meteo.com')) { return; } e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => { if (res.ok) { const cl = res.clone(); caches.open(CACHE).then(c => c.put(e.request, cl)); } return res; }).catch(() => caches.match('./')))); });
+    self.addEventListener('fetch', e => { const url = e.request.url; if (url.includes('er-api.com') || url.includes('frankfurter') || url.includes('exchangerate') || url.includes('metals.dev') || url.includes('open-meteo.com')) { return; } e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => { if (res.ok) { const cl = res.clone(); caches.open(CACHE).then(c => c.put(e.request, cl)); } return res; }).catch(() => caches.match('./')))); });
   `;
   const swBlob = new Blob([swCode], {type: 'application/javascript'});
   const swUrl = URL.createObjectURL(swBlob);
@@ -57,14 +57,14 @@ if ('serviceWorker' in navigator) {
 </script>
 <style>
 :root{--coral:#FF6B6B;--coral-g:#FF6B6B44;--teal:#00D2D3;--teal-g:#00D2D344;--gold:#FECA57;--gold-g:#FECA5744;--pink:#FF9FF3;--pink-g:#FF9FF344;--lime:#55E6C1;--lime-g:#55E6C144;--electric:#5F7FFF;--electric-g:#5F7FFF44;--bg:#0B0E17;--bg2:#111627;--bg3:#182036;--text:#F0F2F8;--text2:#8892B0;--border:#1E2744;--bh:#2A3660}
-.light{--bg:#ECEEF4;--bg2:#F5F6FA;--bg3:#DFE3EC;--text:#1A202C;--text2:#5A6478;--border:#C5CEDB;--bh:#A8B3C4;--coral:#D14343;--coral-g:#D1434318;--teal:#008F8F;--teal-g:#008F8F18;--gold:#B8900F;--gold-g:#B8900F18;--pink:#B85AAF;--pink-g:#B85AAF18;--lime:#1E9668;--lime-g:#1E966818;--electric:#3D56C4;--electric-g:#3D56C418}
+.light{--bg:#E4E7EF;--bg2:#ECEEF5;--bg3:#D6DAE6;--text:#1A202C;--text2:#5A6478;--border:#B8C1D0;--bh:#A0AABB;--coral:#C43838;--coral-g:#C4383818;--teal:#007A7A;--teal-g:#007A7A18;--gold:#A07E0D;--gold-g:#A07E0D18;--pink:#A44E9C;--pink-g:#A44E9C18;--lime:#1A8259;--lime-g:#1A825918;--electric:#3550B5;--electric-g:#3550B518}
 .light body,.light .bottom-nav,.light header{background:var(--bg2)}
-.light body::before{background:radial-gradient(ellipse 600px 400px at 10% 20%,#D1434308 0%,transparent 70%),radial-gradient(ellipse 500px 500px at 90% 80%,#008F8F08 0%,transparent 70%)}
+.light body::before{background:none}
 .light .btn-ghost{background:var(--bg3);color:var(--text2);border-color:var(--border)}
 .light .field{background:var(--bg3);border-color:var(--border);color:var(--text)}
 .light .modal{background:var(--bg2);border-color:var(--border)}
 .light .overlay{background:rgba(0,0,0,.35)}
-.light .card{box-shadow:0 2px 12px rgba(0,0,0,.06)}
+.light .card{box-shadow:0 1px 4px rgba(0,0,0,.05);border:1px solid var(--border)}
 .light .drop-zone{border-color:var(--border)}
 .light .stat-chip{background:var(--bg3)}
 .light ::-webkit-scrollbar-thumb{background:var(--border)}
@@ -78,6 +78,12 @@ if ('serviceWorker' in navigator) {
 .light .note-card-body{color:var(--text2)}
 .light .sort-btn{background:var(--bg3);border-color:var(--border)}
 .light .backup-bar{background:#FECA5718;border-color:#F6B93B}
+.light .exp-tab.active{background:var(--bg3);border-color:var(--text2)}
+.light .exp-summary-card,.light .exp-budget-card{background:var(--bg);border-color:var(--border)}
+.light .bnav-item.active{color:var(--coral)}
+.light .bottom-nav{border-top:1px solid var(--border);background:var(--bg2)}
+.light .cal-cell{border:1px solid transparent}
+.light .cal-cell:hover{background:var(--bg3)}
 .light .drag-ghost{background:var(--bg2);border-color:var(--teal);box-shadow:0 12px 40px rgba(0,0,0,.1)}
 .light .chart-bar:hover::after{background:var(--bg2);border-color:var(--border)}
 body,header,.bottom-nav,.card,.field,.btn,.modal,.overlay,.badge{transition:background .3s,color .3s,border-color .3s,box-shadow .3s}
@@ -144,7 +150,6 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .exp-budget-card{padding:14px;border-radius:16px;border:1px solid var(--border);background:var(--bg2);margin-bottom:10px;transition:border-color .2s,transform .1s}
 .exp-budget-card:hover{border-color:var(--coral)}
 .exp-budget-card:active{transform:scale(.98)}
-.light .exp-summary-card,.light .exp-budget-card{background:var(--bg2);border-color:var(--border)}
 .notes-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px}
 @media(min-width:768px){.notes-grid{grid-template-columns:1fr 1fr 1fr}}
 .note-card{border-radius:16px;padding:14px;border:1px solid var(--border);cursor:pointer;transition:transform .15s,box-shadow .15s;overflow:hidden;position:relative;min-height:80px}
@@ -525,13 +530,12 @@ function InfoBar({language}){
     setLoading(true);
     const result={...info,updated:new Date().toISOString()};
     try{
-      const gRes=await fetch('https://data-asg.goldprice.org/dbXRates/SAR');
+      const gRes=await fetch('https://api.metals.dev/v1/latest?api_key=demo&currency=SAR&unit=gram');
       const gData=await gRes.json();
-      if(gData.items&&gData.items[0]){
-        const g=gData.items[0];
-        result.goldOz=Math.round(g.xauPrice);
-        result.goldGram=Math.round(g.xauPrice/31.1035);
-        result.silverGram=Math.round(g.xagPrice/31.1035*100)/100;
+      if(gData.metals){
+        result.goldGram=Math.round(gData.metals.gold||0);
+        result.goldOz=Math.round((gData.metals.gold||0)*31.1035);
+        result.silverGram=Math.round((gData.metals.silver||0)*100)/100;
       }
     }catch(e){console.warn('Gold fetch error:',e);}
     try{
@@ -1694,9 +1698,9 @@ function LiveWidget({language}){
   useEffect(()=>{
     // Gold price in SAR
     const fetchGold=async()=>{try{
-      const r=await fetch('https://data-asg.goldprice.org/dbXRates/SAR');
+      const r=await fetch('https://api.metals.dev/v1/latest?api_key=demo&currency=SAR&unit=toz');
       const d=await r.json();
-      if(d&&d.items&&d.items[0]){const g=d.items[0];setGoldSAR(Math.round(g.xauPrice));}
+      if(d&&d.metals){setGoldSAR(Math.round(d.metals.gold||0));}
     }catch(e){console.warn('Gold API error:',e);}};
 
     // Weather - try geolocation first, fallback to Riyadh
