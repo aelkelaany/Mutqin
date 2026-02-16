@@ -44,11 +44,11 @@ document.head.appendChild(mLink);
 // Service Worker (inline)
 if ('serviceWorker' in navigator) {
   const swCode = `
-    const CACHE = 'gt-v7';
+    const CACHE = 'gt-v9';
     const URLS = ['./', 'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js','https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js','https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css'];
     self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS)).then(() => self.skipWaiting())); });
     self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
-    self.addEventListener('fetch', e => { const url = e.request.url; if (url.includes('er-api.com') || url.includes('frankfurter') || url.includes('exchangerate')) { return; } e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => { if (res.ok) { const cl = res.clone(); caches.open(CACHE).then(c => c.put(e.request, cl)); } return res; }).catch(() => caches.match('./')))); });
+    self.addEventListener('fetch', e => { const url = e.request.url; if (url.includes('er-api.com') || url.includes('frankfurter') || url.includes('exchangerate') || url.includes('goldprice.org') || url.includes('open-meteo.com')) { return; } e.respondWith(caches.match(e.request).then(r => r || fetch(e.request).then(res => { if (res.ok) { const cl = res.clone(); caches.open(CACHE).then(c => c.put(e.request, cl)); } return res; }).catch(() => caches.match('./')))); });
   `;
   const swBlob = new Blob([swCode], {type: 'application/javascript'});
   const swUrl = URL.createObjectURL(swBlob);
@@ -57,9 +57,9 @@ if ('serviceWorker' in navigator) {
 </script>
 <style>
 :root{--coral:#FF6B6B;--coral-g:#FF6B6B44;--teal:#00D2D3;--teal-g:#00D2D344;--gold:#FECA57;--gold-g:#FECA5744;--pink:#FF9FF3;--pink-g:#FF9FF344;--lime:#55E6C1;--lime-g:#55E6C144;--electric:#5F7FFF;--electric-g:#5F7FFF44;--bg:#0B0E17;--bg2:#111627;--bg3:#182036;--text:#F0F2F8;--text2:#8892B0;--border:#1E2744;--bh:#2A3660}
-.light{--bg:#F5F7FA;--bg2:#FFFFFF;--bg3:#EEF1F6;--text:#1A202C;--text2:#64748B;--border:#E2E8F0;--bh:#CBD5E1}
+.light{--bg:#ECEEF4;--bg2:#F5F6FA;--bg3:#DFE3EC;--text:#1A202C;--text2:#5A6478;--border:#C5CEDB;--bh:#A8B3C4;--coral:#D14343;--coral-g:#D1434318;--teal:#008F8F;--teal-g:#008F8F18;--gold:#B8900F;--gold-g:#B8900F18;--pink:#B85AAF;--pink-g:#B85AAF18;--lime:#1E9668;--lime-g:#1E966818;--electric:#3D56C4;--electric-g:#3D56C418}
 .light body,.light .bottom-nav,.light header{background:var(--bg2)}
-.light body::before{background:radial-gradient(ellipse 600px 400px at 10% 20%,#FF6B6B06 0%,transparent 70%),radial-gradient(ellipse 500px 500px at 90% 80%,#00D2D306 0%,transparent 70%)}
+.light body::before{background:radial-gradient(ellipse 600px 400px at 10% 20%,#D1434308 0%,transparent 70%),radial-gradient(ellipse 500px 500px at 90% 80%,#008F8F08 0%,transparent 70%)}
 .light .btn-ghost{background:var(--bg3);color:var(--text2);border-color:var(--border)}
 .light .field{background:var(--bg3);border-color:var(--border);color:var(--text)}
 .light .modal{background:var(--bg2);border-color:var(--border)}
@@ -73,6 +73,9 @@ if ('serviceWorker' in navigator) {
 .light .filter-chip{background:var(--bg3);border-color:var(--border)}
 .light .search-wrap input{background:var(--bg3);border-color:var(--border)}
 .light .note-box{background:var(--bg3);border-color:var(--border)}
+.light .note-card{border-color:var(--border)}
+.light .note-card-title{color:var(--text)}
+.light .note-card-body{color:var(--text2)}
 .light .sort-btn{background:var(--bg3);border-color:var(--border)}
 .light .backup-bar{background:#FECA5718;border-color:#F6B93B}
 .light .drag-ghost{background:var(--bg2);border-color:var(--teal);box-shadow:0 12px 40px rgba(0,0,0,.1)}
@@ -258,6 +261,7 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 <div id="root"></div>
 <script type="text/babel">
 const{useState,useEffect,useCallback,useMemo}=React;
+const APP_VERSION='1.0.0';
 const DB='GoalTrackerDB',VER=6,ST=['goals','milestones','tasks','quickTasks','taskLists','meetings','expenses','categories','budgets','notes'];
 const ICONS={goals:['🎯','🏆','💼','🎓','💪','🌟','🚀','📈','🏃‍♂️','💡','🎨','🔬','🏠','💰','❤️','🧠','🕌','📖','🤲','🌙','⭐','🔥','🏅','🎖️','💎','🗝️','🌍','🏋️','🧘','🎵','📚','🏗️','🔮','🎪','🦅','🌱','🏔️','⚡','🛡️','🧭'],milestones:['📍','🏁','🎖️','⭐','💎','🔑','🎯','📊','🏅','🔥','⚡','🌈','🕋','🌙','📖','🤲','🕌','☪️','🏆','👑','💫','🎗️','🔰','🌟','🎊','🏔️','🦁','✨','🔱','💠'],tasks:['✅','📝','✏️','📋','🔨','⚙️','🔧','💡','📱','📊','🎬','🔍','🎨','💻','📞','🧹','📖','🕌','🤲','🌙','🕋','☪️','🍽️','🍲','🔪','🛒','🚿','👔','🧕','📿','🕐','🕑','🕒','🕓','🕔','💼','📧','🗂️','📎','🖥️','📊','📄','🗳️','🤝','📌','🏷️','💳','📦','🔔','📢','🧪','🔬','📐','🖌️','📓','🏃','🧘','💊','🍎','💧','🧠','🔋','🌅','🌄','🌇','🌆','⏰','🎒','✈️','🚗','🏥','🛍️','🎁','💌','📸','🎶','🎮','📺','🧩','🏠','🌳','🐝','☕','🍵','🫖'],meetings:['👥','🤝','💬','📞','🎤','🏢','☕','🍽️','📹','🗣️','🎯','💼','🕌','📱','💻','🎪','📋','🏛️','🗓️','⏰','🔔','👨‍💼','👩‍💼','🧑‍🏫','🎓'],lists:['🛒','📞','📚','✈️','🏠','🎵','🎮','🧹','💊','📦','🎁','🍽️','👕','🔧','🏋️','🌱','📿','🕌','🤲','🍲','📖','☪️','🧕','🎒','💼','🧪','🩺','🎨','🎯','✨']};
 
@@ -512,6 +516,59 @@ function SearchFilter({language,search,onSearch,filter,onFilter}){
 }
 
 // ========== BACKUP REMINDER ==========
+// ========== INFO BAR (Gold + Weather) ==========
+function InfoBar({language}){
+  const[info,setInfo]=useState(()=>{try{return JSON.parse(localStorage.getItem('gt-infobar'))||{};}catch(e){return{};}});
+  const[loading,setLoading]=useState(false);
+
+  const fetchInfo=useCallback(async()=>{
+    setLoading(true);
+    const result={...info,updated:new Date().toISOString()};
+    try{
+      const gRes=await fetch('https://data-asg.goldprice.org/dbXRates/SAR');
+      const gData=await gRes.json();
+      if(gData.items&&gData.items[0]){
+        const g=gData.items[0];
+        result.goldOz=Math.round(g.xauPrice);
+        result.goldGram=Math.round(g.xauPrice/31.1035);
+        result.silverGram=Math.round(g.xagPrice/31.1035*100)/100;
+      }
+    }catch(e){console.warn('Gold fetch error:',e);}
+    try{
+      const wRes=await fetch('https://api.open-meteo.com/v1/forecast?latitude=24.7136&longitude=46.6753&current_weather=true&timezone=Asia/Riyadh');
+      const wData=await wRes.json();
+      if(wData.current_weather){
+        result.temp=Math.round(wData.current_weather.temperature);
+        result.windSpeed=Math.round(wData.current_weather.windspeed);
+        const wc=wData.current_weather.weathercode;
+        result.weatherIcon=wc===0?'☀️':wc<=3?'⛅':wc<=48?'🌫️':wc<=67?'🌧️':wc<=77?'❄️':wc<=82?'🌧️':'⛈️';
+      }
+    }catch(e){console.warn('Weather fetch error:',e);}
+    localStorage.setItem('gt-infobar',JSON.stringify(result));
+    setInfo(result);
+    setLoading(false);
+  },[info]);
+
+  useEffect(()=>{
+    const last=info.updated?new Date(info.updated):null;
+    const now=new Date();
+    if(!last||now-last>30*60*1000)fetchInfo();
+  },[]);
+
+  if(!info.goldGram&&!info.temp)return null;
+  const ago=info.updated?Math.round((new Date()-new Date(info.updated))/60000):0;
+
+  return(<div style={{display:'flex',gap:8,alignItems:'center',flexWrap:'wrap',padding:'8px 12px',background:'var(--bg3)',borderRadius:12,fontSize:11,color:'var(--text2)'}}>
+    {info.goldGram&&<span style={{display:'flex',alignItems:'center',gap:3}}>🥇 <strong style={{color:'var(--gold)'}}>{info.goldGram}</strong> {T('ر.س/جرام','SAR/g',language)}</span>}
+    {info.goldOz&&<span style={{opacity:.5}}>|</span>}
+    {info.goldOz&&<span>🏆 {info.goldOz.toLocaleString()} {T('ر.س/أونصة','SAR/oz',language)}</span>}
+    {info.temp!==undefined&&<span style={{opacity:.5}}>|</span>}
+    {info.temp!==undefined&&<span>{info.weatherIcon} <strong>{info.temp}°C</strong> {T('الرياض','Riyadh',language)}</span>}
+    <button onClick={fetchInfo} style={{marginRight:'auto',marginLeft:'auto',background:'none',border:'none',cursor:'pointer',fontSize:11,color:'var(--text2)',padding:0}} title={T('تحديث','Refresh',language)}>{loading?'⏳':'🔄'}</button>
+    {ago>0&&<span style={{fontSize:9,opacity:.5}}>{ago<60?`${ago}${T('د','m',language)}`:Math.round(ago/60)+T('س','h',language)}</span>}
+  </div>);
+}
+
 function BackupBar({language,onExport}){
   const lastExport=localStorage.getItem('gt-last-export');
   const daysSince=lastExport?Math.floor((Date.now()-new Date(lastExport).getTime())/(86400000)):999;
@@ -1035,7 +1092,7 @@ function MeetingsPage({data,language,onAdd,onEdit,onDelete}){
 function Today({data,language,onAdd,onEdit,onDelete,onStatus,onSaveList,onDeleteList}){const[ni,setNi]=useState({});const ts=localDS();const tT=(data.tasks||[]).filter(t=>t.dueDate&&t.dueDate.startsWith(ts));const tQ=(data.quickTasks||[]).filter(t=>t.dueDate&&t.dueDate.startsWith(ts));const tM=(data.meetings||[]).filter(m=>m.meetingDate&&m.meetingDate.startsWith(ts)).sort((a,b)=>new Date(a.meetingDate)-new Date(b.meetingDate));const sc={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text2)'};const sl={complete:T('مكتمل','Done',language),inProgress:T('جارٍ','Active',language),partial:T('جزئي','Partial',language),notStarted:T('لم يبدأ','Todo',language)};const pc={high:'var(--coral)',medium:'var(--gold)',low:'var(--lime)'};const n3={notStarted:'inProgress',inProgress:'complete',complete:'notStarted'};const n4={notStarted:'inProgress',inProgress:'partial',partial:'complete',complete:'notStarted'};const all=[...tT.map(t=>({...t,_s:'tasks',_ns:n4})),...tQ.map(t=>({...t,_s:'quickTasks',_ns:n3}))];const tLI=async(l,iid)=>{await onSaveList({...l,items:l.items.map(i=>i.id===iid?{...i,checked:!i.checked}:i)});};const aLI=async(l,title)=>{if(!title.trim())return;await onSaveList({...l,items:[...l.items,{id:uid(),title:title.trim(),checked:false,createdAt:new Date().toISOString()}]});setNi({...ni,[l.id]:''});};const rLI=async(l,iid)=>{await onSaveList({...l,items:l.items.filter(i=>i.id!==iid)});};const lP=l=>{if(!l.items||!l.items.length)return 0;return l.items.filter(i=>i.checked).length/l.items.length*100;};
 return(<div style={{display:'flex',flexDirection:'column',gap:16}}><h2 style={{fontSize:22,fontWeight:900}}>🔥 {T('اليوم','Today',language)}</h2>
 <div className="card" style={{padding:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--pink)'}}>👥 {T('الاجتماعات','Meetings',language)}</h3><button className="btn btn-pink btn-xs" onClick={()=>onAdd('meeting')}>⚡ {T('جديد','New',language)}</button></div>{!tM.length?(<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>😌 {T('لا اجتماعات','No meetings',language)}</p>):tM.map(m=>(<div key={m.id} style={{display:'flex',alignItems:'flex-start',gap:12,padding:'12px 0',borderBottom:'1px solid var(--border)'}}><div style={{fontSize:28,width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--pink-g)',borderRadius:12,flexShrink:0}}>{m.icon||'👥'}</div><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14}}>{m.title}</div><div style={{fontSize:12,color:'var(--text2)',display:'flex',gap:8,flexWrap:'wrap',marginTop:3}}>{m.meetingDate&&<span>🕐 {new Date(m.meetingDate).toLocaleTimeString(language==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'})}</span>}{m.location&&<span>📍 {m.location}</span>}{m.attendees&&<span>👤 {m.attendees}</span>}</div>{m.minutes&&<div className="note-box" style={{background:'var(--pink-g)',borderColor:'var(--pink)'}}>📋 <strong>{T('المحضر','Minutes',language)}:</strong> {m.minutes.length>120?m.minutes.slice(0,120)+'...':m.minutes}</div>}{m.decisions&&<div className="note-box" style={{background:'var(--lime-g)',borderColor:'var(--lime)'}}>✅ <strong>{T('القرارات','Decisions',language)}:</strong> {m.decisions.length>80?m.decisions.slice(0,80)+'...':m.decisions}</div>}{m.notes&&!m.minutes&&<div className="note-box">📝 {m.notes.length>60?m.notes.slice(0,60)+'...':m.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('meeting',m)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('meetings',m.id,m.title)}>🗑️</button></div></div>))}</div>
-{/* Meetings moved to dedicated tab */}
+
 <div className="card" style={{padding:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--teal)'}}>✅ {T('المهام','Tasks',language)} <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>({all.filter(t=>t.status==='complete').length}/{all.length})</span></h3><button className="btn btn-teal btn-xs" onClick={()=>onAdd('quickTask')}>⚡ {T('مهمة','Task',language)}</button></div>{!all.length?(<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>🎉 {T('لا مهام','No tasks',language)}</p>):all.map(tk=>(<div key={tk.id} style={{display:'flex',alignItems:'center',gap:8,padding:'10px 0',borderBottom:'1px solid var(--border)'}}><div onClick={()=>onStatus(tk._s,tk,tk._ns[tk.status])} style={{width:26,height:26,borderRadius:8,border:`2px solid ${sc[tk.status]}`,background:tk.status==='complete'?sc.complete:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0}}>{tk.status==='complete'&&'✓'}</div><span style={{fontSize:18}}>{tk.icon||'✅'}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span>{tk.priority&&<span className="badge" style={{background:`${pc[tk.priority]||'var(--text2)'}22`,color:pc[tk.priority]||'var(--text2)'}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>}{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>60?tk.notes.slice(0,60)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit(tk._s==='tasks'?'task':'quickTask',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete(tk._s,tk.id,tk.title)}>🗑️</button></div></div>))}</div>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--gold)'}}>📋 {T('القوائم','Lists',language)}</h3><button className="btn btn-gold btn-xs" onClick={()=>onAdd('taskList')}>⚡ {T('قائمة','List',language)}</button></div>
 {!(data.taskLists||[]).length?(<div className="card" style={{padding:30,textAlign:'center'}}><div style={{fontSize:40,marginBottom:8}}>📝</div><p style={{color:'var(--text2)',fontSize:13}}>{T('أنشئ قائمتك الأولى!','Create your first list!',language)}</p></div>):(data.taskLists||[]).map(list=>(<div key={list.id} className="card" style={{padding:14,borderRight:language==='ar'?`3px solid ${list.color}`:'none',borderLeft:language!=='ar'?`3px solid ${list.color}`:'none'}}><div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}><div style={{fontSize:24,width:40,height:40,display:'flex',alignItems:'center',justifyContent:'center',background:`${list.color}22`,borderRadius:10,flexShrink:0}}>{list.icon}</div><div style={{flex:1}}><div style={{fontWeight:800,fontSize:14}}>{list.name}</div><div style={{fontSize:11,color:'var(--text2)',fontWeight:600}}>{list.items?.length||0} {T('عناصر','items',language)} · {Math.round(lP(list))}%</div></div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('taskList',list)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDeleteList(list)}>🗑️</button></div></div><div style={{height:4,background:'var(--border)',borderRadius:4,marginBottom:10,overflow:'hidden'}}><div style={{height:'100%',width:`${lP(list)}%`,background:`linear-gradient(90deg,${list.color},${list.color}88)`,borderRadius:4,transition:'width .5s'}}/></div>{(list.items||[]).map(it=>(<div key={it.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}><div onClick={()=>tLI(list,it.id)} style={{width:22,height:22,borderRadius:6,border:`2px solid ${it.checked?'var(--lime)':'var(--border)'}`,background:it.checked?'var(--lime)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{it.checked&&'✓'}</div><span style={{flex:1,fontSize:13,fontWeight:500,textDecoration:it.checked?'line-through':'none',opacity:it.checked?.4:1}}>{it.title}</span><button className="btn btn-ghost btn-icon-xs" style={{width:22,height:22,fontSize:10}} onClick={()=>rLI(list,it.id)}>✕</button></div>))}<div style={{display:'flex',gap:8,marginTop:8}}><input className="field" style={{fontSize:13,padding:'8px 12px'}} value={ni[list.id]||''} onChange={e=>setNi({...ni,[list.id]:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')aLI(list,ni[list.id]||'');}} placeholder={T('عنصر جديد...','New item...',language)}/><button className="btn btn-teal btn-sm" onClick={()=>aLI(list,ni[list.id]||'')}>+</button></div></div>))}</div>);}
@@ -1412,7 +1469,15 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
 }
 
 // ========== NOTES / MYFAKRA ==========
-const NOTE_COLORS=['#1E2744','#2D1B1B','#1B2D1B','#1B1B2D','#2D2B1B','#1B2D2D','#2D1B2D','#2B2D1B'];
+const NOTE_COLORS_DARK=['#1E2744','#2D1B1B','#1B2D1B','#1B1B2D','#2D2B1B','#1B2D2D','#2D1B2D','#2B2D1B'];
+const NOTE_COLORS_LIGHT=['#D8DDE8','#F5DDD9','#D5EADA','#D5E5F2','#F0E7C8','#D1EEF1','#E5D5E8','#DDE8D6'];
+function getNoteColors(isDark){return isDark?NOTE_COLORS_DARK:NOTE_COLORS_LIGHT;}
+function mapNoteColor(storedColor,isDark){
+  const darkIdx=NOTE_COLORS_DARK.indexOf(storedColor);
+  const lightIdx=NOTE_COLORS_LIGHT.indexOf(storedColor);
+  if(isDark){return darkIdx>=0?storedColor:lightIdx>=0?NOTE_COLORS_DARK[lightIdx]:storedColor;}
+  else{return lightIdx>=0?storedColor:darkIdx>=0?NOTE_COLORS_LIGHT[darkIdx]:storedColor;}
+}
 const NOTE_TYPES=[
   {id:'text',icon:'📝',l_ar:'نص',l_en:'Text'},
   {id:'checklist',icon:'✅',l_ar:'قائمة',l_en:'Checklist'},
@@ -1438,10 +1503,11 @@ function checkReminders(notes,language,toast){
   return notes.filter(n=>n._shouldFire).map(n=>({...n,reminderFired:true,_shouldFire:undefined}));
 }
 
-function NoteModal({note,language,onSave,onDelete,onClose}){
+function NoteModal({note,language,onSave,onDelete,onClose,isDark}){
   const isE=note&&note.id&&!note._isNew;
+  const nc=getNoteColors(isDark);
   const[form,setForm]=useState(()=>isE?{...note,checklist:note.checklist||[]}:{
-    title:'',content:'',type:'text',color:NOTE_COLORS[0],pinned:false,
+    title:'',content:'',type:'text',color:nc[0],pinned:false,
     checklist:[],linkUrl:'',linkDesc:'',
     reminder:'',reminderFired:false
   });
@@ -1490,7 +1556,7 @@ function NoteModal({note,language,onSave,onDelete,onClose}){
       </div>}
 
       <div><label style={{fontSize:11,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>🎨 {T('اللون','Color',language)}</label>
-        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{NOTE_COLORS.map(c=>(<div key={c} onClick={()=>f('color',c)} style={{width:28,height:28,borderRadius:8,background:c,cursor:'pointer',border:`2px solid ${form.color===c?'var(--teal)':'transparent'}`,transition:'border .15s'}}/>))}</div>
+        <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{nc.map((c,ci)=>(<div key={ci} onClick={()=>f('color',c)} style={{width:28,height:28,borderRadius:8,background:c,cursor:'pointer',border:`2px solid ${form.color===c||(NOTE_COLORS_DARK.indexOf(form.color)===ci)||(NOTE_COLORS_LIGHT.indexOf(form.color)===ci)?'var(--teal)':'transparent'}`,transition:'border .15s'}}/>))}</div>
       </div>
 
       <div><label style={{fontSize:11,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>⏰ {T('تذكير (اختياري)','Reminder (optional)',language)}</label>
@@ -1507,7 +1573,7 @@ function NoteModal({note,language,onSave,onDelete,onClose}){
   </div></div>);
 }
 
-function Notes({data,language,onSaveNote,onDeleteNote,toast}){
+function Notes({data,language,onSaveNote,onDeleteNote,toast,isDark}){
   const[noteModal,setNoteModal]=useState(null);
   const[viewMode,setViewMode]=useState('grid');
   const[noteSearch,setNoteSearch]=useState('');
@@ -1543,7 +1609,7 @@ function Notes({data,language,onSaveNote,onDeleteNote,toast}){
     const checkTotal=n.checklist?n.checklist.length:0;
 
     if(viewMode==='list'){
-      return(<div key={n.id} className="note-card" style={{background:n.color||NOTE_COLORS[0],borderColor:n.pinned?'var(--gold)':'var(--border)'}} onClick={()=>setNoteModal(n)}>
+      return(<div key={n.id} className="note-card" style={{background:mapNoteColor(n.color,isDark)||getNoteColors(isDark)[0],borderColor:n.pinned?'var(--gold)':'var(--border)'}} onClick={()=>setNoteModal(n)}>
         {n.pinned&&<span style={{fontSize:14,marginLeft:4,marginRight:4}}>📌</span>}
         <span style={{fontSize:20,flexShrink:0}}>{typeInfo.icon}</span>
         <div style={{flex:1,minWidth:0}}>
@@ -1557,7 +1623,7 @@ function Notes({data,language,onSaveNote,onDeleteNote,toast}){
       </div>);
     }
 
-    return(<div key={n.id} className={`note-card ${n.pinned?'pinned':''}`} style={{background:n.color||NOTE_COLORS[0],borderColor:n.pinned?'var(--gold)':'var(--border)'}} onClick={()=>setNoteModal(n)}>
+    return(<div key={n.id} className={`note-card ${n.pinned?'pinned':''}`} style={{background:mapNoteColor(n.color,isDark)||getNoteColors(isDark)[0],borderColor:n.pinned?'var(--gold)':'var(--border)'}} onClick={()=>setNoteModal(n)}>
       {n.pinned&&<span className="note-pin">📌</span>}
       <div style={{display:'flex',alignItems:'center',gap:6,marginBottom:4}}>
         <span style={{fontSize:16}}>{typeInfo.icon}</span>
@@ -1611,7 +1677,7 @@ function Notes({data,language,onSaveNote,onDeleteNote,toast}){
       }
     </div>
 
-    {noteModal&&<NoteModal note={noteModal} language={language} onSave={n=>{onSaveNote(n);setNoteModal(null);}} onDelete={noteModal.id&&!noteModal._isNew?()=>{onDeleteNote(noteModal);setNoteModal(null);}:null} onClose={()=>setNoteModal(null)}/>}
+    {noteModal&&<NoteModal note={noteModal} language={language} isDark={isDark} onSave={n=>{onSaveNote(n);setNoteModal(null);}} onDelete={noteModal.id&&!noteModal._isNew?()=>{onDeleteNote(noteModal);setNoteModal(null);}:null} onClose={()=>setNoteModal(null)}/>}
   </div>);
 }
 
@@ -1619,6 +1685,50 @@ function Timeline({data,language}){const[tlSort,setTlSort]=useState('asc');const
 return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2 style={{fontSize:22,fontWeight:900}}>📊 {T('الجدول الزمني','Timeline',language)}</h2><SortBtn sort={tlSort} onToggle={()=>setTlSort(s=>s==='asc'?'desc':'asc')} language={language}/></div>{!items.length?(<div className="card" style={{padding:50,textAlign:'center'}}><div style={{fontSize:56,marginBottom:16}}>⏳</div><p style={{color:'var(--text2)',fontWeight:600}}>{T('لا توجد عناصر','No items',language)}</p></div>):(<div style={{position:'relative',paddingRight:language==='ar'?28:0,paddingLeft:language!=='ar'?28:0}}><div style={{position:'absolute',top:0,bottom:0,width:3,background:'linear-gradient(180deg,var(--coral),var(--teal),var(--gold))',borderRadius:4,right:language==='ar'?11:'auto',left:language!=='ar'?11:'auto'}}/>{items.map((it,i)=>{const ds=it._date.split('T')[0],past=ds<tStr,isT=ds===tStr;const info=lb[it._type];const clr=it._c;return(<div key={i} style={{position:'relative',marginBottom:14,opacity:past?.5:1}}><div style={{position:'absolute',width:14,height:14,borderRadius:'50%',background:isT?'#FECA57':clr,right:language==='ar'?5:'auto',left:language!=='ar'?5:'auto',top:18,border:'3px solid var(--bg2)',zIndex:1,boxShadow:isT?'0 0 10px var(--gold-g)':'none'}}/><div className="card" style={{marginRight:language==='ar'?22:0,marginLeft:language!=='ar'?22:0,padding:14}}><div style={{display:'flex',alignItems:'center',gap:10}}><span style={{fontSize:24}}>{it.icon||info.i}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14}}>{it.title}</div><div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:4,alignItems:'center'}}><span className="badge" style={{background:`${clr}22`,color:clr}}>{info.i} {info.l}</span><span style={{fontSize:11,color:'var(--text2)',fontWeight:600}}>{new Date(it._date).toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'short',day:'numeric',year:'numeric'})}</span>{it._type==='meet'&&it.location&&<span style={{fontSize:11,color:'var(--text2)'}}>📍 {it.location}</span>}</div></div>{isT&&<span className="badge" style={{background:'var(--gold-g)',color:'var(--gold)',animation:'pulse 2s infinite'}}>🔥 {T('اليوم','Today',language)}</span>}</div></div></div>);})}</div>)}</div>);}
 
 // ========== APP ==========
+// ========== LIVE WIDGET (Gold + Weather) ==========
+function LiveWidget({language}){
+  const[goldSAR,setGoldSAR]=useState(null);
+  const[temp,setTemp]=useState(null);
+  const[city,setCity]=useState(null);
+
+  useEffect(()=>{
+    // Gold price in SAR
+    const fetchGold=async()=>{try{
+      const r=await fetch('https://data-asg.goldprice.org/dbXRates/SAR');
+      const d=await r.json();
+      if(d&&d.items&&d.items[0]){const g=d.items[0];setGoldSAR(Math.round(g.xauPrice));}
+    }catch(e){console.warn('Gold API error:',e);}};
+
+    // Weather - try geolocation first, fallback to Riyadh
+    const fetchWeather=async(lat,lon,cityName)=>{try{
+      const r=await fetch(`https://api.open-meteo.com/v1/forecast?latitude=${lat}&longitude=${lon}&current=temperature_2m,weather_code`);
+      const d=await r.json();
+      if(d&&d.current){setTemp(Math.round(d.current.temperature_2m));setCity(cityName);}
+    }catch(e){console.warn('Weather API error:',e);}};
+
+    fetchGold();
+    if('geolocation' in navigator){
+      navigator.geolocation.getCurrentPosition(
+        pos=>fetchWeather(pos.coords.latitude,pos.coords.longitude,T('موقعك','Your Location',language)),
+        ()=>fetchWeather(24.7136,46.6753,T('الرياض','Riyadh',language))
+      );
+    }else{fetchWeather(24.7136,46.6753,T('الرياض','Riyadh',language));}
+
+    // Refresh every 15 min
+    const iv=setInterval(fetchGold,15*60*1000);
+    return()=>clearInterval(iv);
+  },[language]);
+
+  if(!goldSAR&&temp===null)return null;
+
+  const weatherIcon=(t)=>{if(t===null)return'';if(t>=40)return'🔥';if(t>=30)return'☀️';if(t>=20)return'🌤️';if(t>=10)return'⛅';if(t>=0)return'🌥️';return'❄️';};
+
+  return(<div style={{display:'flex',gap:8,alignItems:'center',fontSize:10,color:'var(--text2)',fontWeight:600,flexWrap:'wrap'}}>
+    {goldSAR&&<span title={T('سعر أونصة الذهب بالريال','Gold oz price in SAR',language)} style={{display:'flex',alignItems:'center',gap:3,background:'var(--gold-g)',color:'var(--gold)',padding:'2px 8px',borderRadius:8,cursor:'default'}}>🥇 {goldSAR.toLocaleString()} SAR</span>}
+    {temp!==null&&<span title={city||''} style={{display:'flex',alignItems:'center',gap:3,background:'var(--teal-g)',color:'var(--teal)',padding:'2px 8px',borderRadius:8,cursor:'default'}}>{weatherIcon(temp)} {temp}°C</span>}
+  </div>);
+}
+
 function App(){
   const[lang,setLang]=useState('ar');const[view,setView]=useState('dashboard');
   const[data,setData]=useState({goals:[],milestones:[],tasks:[],quickTasks:[],taskLists:[],meetings:[]});
@@ -1695,7 +1805,7 @@ function App(){
     <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column',position:'relative',zIndex:1}}>
       <header style={{background:'var(--bg2)',borderBottom:'1px solid var(--border)',padding:'10px 14px',position:'sticky',top:0,zIndex:40,backdropFilter:'blur(12px)'}}>
         <div className="desktop-layout" style={{maxWidth:860,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
-          <div style={{display:'flex',alignItems:'center',gap:8}}><img src={MUTQIN_LOGO} alt="متقن" style={{width:36,height:36,borderRadius:8}}/><h1 className="hidden sm:block" style={{fontSize:18,fontWeight:900,background:'linear-gradient(135deg,var(--coral),var(--gold))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>{T('متقن','Mutqin',lang)}</h1></div>
+          <div style={{display:'flex',alignItems:'center',gap:8}}><img src={MUTQIN_LOGO} alt="متقن" style={{width:36,height:36,borderRadius:8}}/><h1 className="hidden sm:block" style={{fontSize:18,fontWeight:900,background:'linear-gradient(135deg,var(--coral),var(--gold))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>{T('متقن','Mutqin',lang)}</h1><span className="hidden sm:block" style={{fontSize:9,color:'var(--text2)',background:'var(--bg3)',padding:'2px 6px',borderRadius:6,fontWeight:700}}>v{APP_VERSION}</span><LiveWidget language={lang}/></div>
           <nav className="dnav" style={{gap:4}}>{navs.map(n=>(<div key={n.id} className={`dnav-item ${view===n.id?'active':''}`} onClick={()=>setView(n.id)}><span>{n.icon}</span><span>{n.label}</span></div>))}</nav>
           <div style={{display:'flex',alignItems:'center',gap:4}}>
             {installPrompt&&<button className="btn btn-coral btn-sm" onClick={handleInstall} style={{fontSize:12,padding:'6px 12px',animation:'pulse 2s infinite'}}>📲 {T('ثبّت التطبيق','Install App',lang)}</button>}
@@ -1715,12 +1825,13 @@ function App(){
             <div style={{flex:1,overflowY:'auto',overflowX:'hidden',background:'var(--bg)'}}>
               <div style={{padding:'36px 10px 90px',maxWidth:'100%'}}>
                 <BackupBar language={lang} onExport={handleExport}/>
+                <InfoBar language={lang}/>
                 {view!=='timeline'&&view!=='expenses'&&view!=='notes'&&view!=='meetings'&&<div style={{marginBottom:16}}><Cal language={lang} data={data} onDayClick={handleDayClick}/></div>}
                 {view==='dashboard'&&<><StatsBar data={data} language={lang}/><WeeklyChart data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter}/></>}
                 {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList}/>}
                 {view==='meetings'&&<MeetingsPage data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete}/>}
                 {view==='expenses'&&<Expenses data={data} language={lang} onSaveExpense={handleSaveExpense} onDeleteExpense={handleDeleteExpense} onSaveCategory={handleSaveCategory} onDeleteCategory={handleDeleteCategory} onSaveBudget={handleSaveBudget} onDeleteBudget={handleDeleteBudget} toast={toast}/>}
-                {view==='notes'&&<Notes data={data} language={lang} onSaveNote={handleSaveNote} onDeleteNote={handleDeleteNote} toast={toast}/>}
+                {view==='notes'&&<Notes data={data} language={lang} isDark={theme==='dark'} onSaveNote={handleSaveNote} onDeleteNote={handleDeleteNote} toast={toast}/>}
                 {view==='timeline'&&<Timeline data={data} language={lang}/>}
               </div>
             </div>
@@ -1731,6 +1842,7 @@ function App(){
         <>
           <main className="desktop-layout" style={{flex:1,maxWidth:860,margin:'0 auto',width:'100%',padding:'16px 12px 100px'}}>
             <BackupBar language={lang} onExport={handleExport}/>
+            <InfoBar language={lang}/>
             {view==='dashboard'||view==='today'?(
               <div className="desk-split">
                 <div className="cal-col">
@@ -1747,7 +1859,7 @@ function App(){
             ):view==='expenses'?(
               <Expenses data={data} language={lang} onSaveExpense={handleSaveExpense} onDeleteExpense={handleDeleteExpense} onSaveCategory={handleSaveCategory} onDeleteCategory={handleDeleteCategory} onSaveBudget={handleSaveBudget} onDeleteBudget={handleDeleteBudget} toast={toast}/>
             ):view==='notes'?(
-              <Notes data={data} language={lang} onSaveNote={handleSaveNote} onDeleteNote={handleDeleteNote} toast={toast}/>
+              <Notes data={data} language={lang} isDark={theme==='dark'} onSaveNote={handleSaveNote} onDeleteNote={handleDeleteNote} toast={toast}/>
             ):(
               <Timeline data={data} language={lang}/>
             )}}
