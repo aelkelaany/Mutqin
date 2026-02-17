@@ -4,7 +4,7 @@
 
 ### نظام إدارة حياتك الشخصي | Personal Life Management System
 
-**v1.0.0** · Single-File PWA · Arabic-First · Offline-Ready
+**v2.0.0** · Single-File PWA · Arabic-First · Offline-Ready
 
 [Live Demo](https://aelkelaany.github.io/Mutqin/) · [Report Bug](https://github.com/aelkelaany/Mutqin/issues)
 
@@ -14,7 +14,7 @@
 
 ## Overview
 
-**Mutqin (متقن)** is a comprehensive personal life management application built as a single HTML file. It combines goal tracking, task management, expense tracking, meeting management, and personal notes into one portable, offline-capable progressive web app.
+**Mutqin (متقن)** is a comprehensive personal life management application built as a single HTML file. It combines goal tracking, task management, expense tracking, meeting management, health tracking, prayer times, and personal notes into one portable, offline-capable progressive web app.
 
 Designed for professionals who need a bilingual (Arabic/English) productivity system that works across devices without requiring any backend infrastructure or account creation.
 
@@ -28,11 +28,18 @@ Hierarchical goal management with milestones and tasks. Each goal supports custo
 
 ### 🔥 Today View
 
-A daily command center showing today's meetings, tasks (both goal-linked and quick tasks), and shopping/to-do lists. The Today tab is the default landing page. Adding new items from this view automatically pre-fills today's date.
+A daily command center showing today's meetings, tasks (both goal-linked and quick tasks), and shopping/to-do lists. The Today tab is the default landing page. Adding new items from this view automatically pre-fills today's date. Meeting status badges (cancelled/deferred) are visible at a glance.
 
 ### 👥 Meetings
 
 Dedicated meetings tab with four filter modes: All, Today, Upcoming, and Past. Each meeting supports title, date/time, location, attendees, agenda notes, meeting minutes, and decisions/action items. Meetings are grouped by month and searchable across all fields.
+
+**Meeting Status** — Each meeting has a status selector with three options:
+- **📅 Scheduled** — Default status for active meetings
+- **❌ Cancelled** — Marks the meeting as cancelled with visual strikethrough
+- **⏳ Deferred** — Requires entering a new date/time while automatically storing the original meeting datetime for reference
+
+Deferred meetings show the original date as a reference badge, making it easy to track rescheduling history.
 
 ### 💰 Expense Tracking
 
@@ -47,6 +54,31 @@ Full-featured expense tracker with multi-currency support (SAR, USD, EUR, GBP, E
 - **Payment Method** tracking (cash, card, transfer)
 
 Closed budgets freeze their expenses from appearing in search results and summary statistics while preserving historical data for review.
+
+### 💚 Health Tracker (NEW)
+
+Daily health logging system for holistic wellness tracking. Record and monitor:
+
+- **⚖️ Weight** — Track daily weight with automatic BMI calculation
+- **📊 BMI** — Auto-calculated from weight and height with color-coded indicators (underweight/normal/overweight/obese)
+- **😴 Sleep** — Log sleep duration in hours, view 7-day average
+- **👣 Steps** — Daily step count with a visual 7-day bar chart
+- **🕐 Fasting** — Track intermittent fasting hours
+- **🏃 Treadmill** — Log treadmill/cardio session duration in minutes
+- **😊 Mood** — Quick mood selection with emoji indicators
+
+Features include summary stat cards, a 7-day steps chart, scrollable history log, and one-tap "Log Today" entry. Height is persisted separately so BMI updates automatically with each weight entry.
+
+### 🕌 Prayer Times (NEW)
+
+Location-based prayer times displayed via a dedicated icon (🕌) in the header next to the weather widget. Tap to open a modal showing:
+
+- **Fajr, Dhuhr, Asr, Maghrib, Isha** prayer times
+- **Sunrise and Sunset** times
+- **Next prayer** highlighted with a badge
+- **Passed prayers** dimmed automatically
+
+Uses the Aladhan API with Umm al-Qura calculation method (method 4). Falls back to Riyadh coordinates if geolocation is denied. Prayer data is fetched based on the user's current city via browser geolocation.
 
 ### 📓 Notes (مفكرتي)
 
@@ -79,19 +111,20 @@ Dashboard stats showing completed/active/pending tasks, completion percentage, a
 | **Fonts** | Tajawal (Arabic) + Poppins (English) |
 | **PWA** | Inline Service Worker + Web App Manifest |
 | **Weather** | Open-Meteo API (free, no key required) |
+| **Prayer Times** | Aladhan API (Umm al-Qura method) |
 
 ### Data Stores (IndexedDB)
 
 ```
 goals, milestones, tasks, quickTasks, meetings,
-expenses, categories, budgets, notes, taskLists
+expenses, categories, budgets, notes, taskLists, healthLogs
 ```
 
 ### Key Design Decisions
 
-**Single-File Architecture** — The entire application (HTML, CSS, JS, icons, service worker, manifest) lives in one `goal-tracker.html` file (~1,824 lines). This makes deployment as simple as copying one file and enables hosting on GitHub Pages with zero build step.
+**Single-File Architecture** — The entire application (HTML, CSS, JS, icons, service worker, manifest) lives in one `goal-tracker.html` file (~2,000 lines). This makes deployment as simple as copying one file and enables hosting on GitHub Pages with zero build step.
 
-**Offline-First** — The service worker caches all assets on first load. External API calls (weather, exchange rates) are excluded from the cache and fail gracefully. All data persists in IndexedDB.
+**Offline-First** — The service worker caches all assets on first load. External API calls (weather, prayer times, exchange rates) are excluded from the cache and fail gracefully. All data persists in IndexedDB.
 
 **No Authentication** — Data lives entirely on the user's device. Export/import via JSON backup provides portability.
 
@@ -137,6 +170,22 @@ The app shows a warning banner if no backup has been taken in 7+ days.
 - **Import**: Settings icon → 📥 Import → select a previously exported `.json` file
 - **Excel Export**: Available per-goal (📤 button) and for filtered expenses
 
+### Meeting Status Management
+
+- When creating/editing a meeting, choose between **Scheduled**, **Cancelled**, or **Deferred**
+- Selecting **Deferred** automatically saves the original date and prompts for a new date/time
+- Cancelled meetings appear with strikethrough and reduced opacity
+- Deferred meetings show the original date as a gold reference badge
+
+### Health Tracking
+
+- Tap **💚 Health** in the bottom navigation
+- Use **"Log Today"** button for daily entries
+- Set your height once — it persists across sessions for automatic BMI calculation
+- View 7-day trends in the steps chart and history log
+- Track fasting windows (great for Ramadan or intermittent fasting)
+- Log treadmill/cardio duration per session
+
 ### Budget Management
 
 - Create budgets with a total amount, currency, and date range
@@ -163,6 +212,7 @@ Toggle between Arabic and English via the `EN`/`عربي` button. The interface 
 | Toggle task status | Tap status circle |
 | Drag to reorder | Long press + drag (tasks/milestones) |
 | Day details | Tap any calendar date |
+| Prayer times | Tap 🕌 icon in header |
 
 ---
 
@@ -191,13 +241,15 @@ Inside `goal-tracker.html`:
 
 ```
 Lines 1-30       → HTML head, meta tags, PWA manifest
-Lines 31-56      → Inline Service Worker (cache: gt-v13)
+Lines 31-56      → Inline Service Worker (cache: gt-v14)
 Lines 57-200     → CSS (dark theme, light theme, components)
 Lines 200-520    → Utility functions, IndexedDB, i18n
 Lines 520-1060   → Components (StatsBar, Calendar, Dashboard, Today, MeetingsPage)
 Lines 1060-1460  → Expense system (modals, charts, budgets)
-Lines 1460-1680  → Notes system
-Lines 1680-1824  → App shell, routing, LiveWidget, Pomodoro timer
+Lines 1460-1650  → Notes system
+Lines 1650-1770  → Health tracker
+Lines 1770-1850  → Prayer times, LiveWidget
+Lines 1850-2001  → App shell, routing, settings
 ```
 
 ---
@@ -206,7 +258,8 @@ Lines 1680-1824  → App shell, routing, LiveWidget, Pomodoro timer
 
 | Version | Cache | Changes |
 |---------|-------|---------|
-| gt-v13 | Current | Today default tab, budget close feature, delete protection, date pre-fill fix |
+| gt-v14 | Current | 💚 Health tracker, 🕌 Prayer times, Meeting status (scheduled/cancelled/deferred) |
+| gt-v13 | — | Today default tab, budget close feature, delete protection, date pre-fill fix |
 | gt-v12 | — | Light mode refinements, InfoBar removal |
 | gt-v11 | — | Gold API fix, light mode color tuning |
 | gt-v10 | — | CORS fix, light mode softening |
