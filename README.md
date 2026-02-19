@@ -57,17 +57,33 @@ Closed budgets freeze their expenses from appearing in search results and summar
 
 ### 💚 Health Tracker (NEW)
 
-Daily health logging system for holistic wellness tracking. Record and monitor:
+Comprehensive health monitoring system split into two layers:
 
-- **⚖️ Weight** — Track daily weight with automatic BMI calculation
-- **📊 BMI** — Auto-calculated from weight and height with color-coded indicators (underweight/normal/overweight/obese)
-- **😴 Sleep** — Log sleep duration in hours, view 7-day average
-- **👣 Steps** — Daily step count with a visual 7-day bar chart
-- **🕐 Fasting** — Track intermittent fasting hours
-- **🏃 Treadmill** — Log treadmill/cardio session duration in minutes
-- **😊 Mood** — Quick mood selection with emoji indicators
+**👤 Body Profile** (one-time setup, editable anytime):
+- Height, target weight, age, gender
+- Waist circumference and body fat % (monthly measurements)
+- BMI auto-calculated with colored visual gauge (underweight → normal → overweight → obese)
+- Weight gain/loss indicator from latest reading
 
-Features include summary stat cards, a 7-day steps chart, scrollable history log, and one-tap "Log Today" entry. Height is persisted separately so BMI updates automatically with each weight entry.
+**📋 Daily Log** (quick daily entry):
+- ⚖️ Weight (with live BMI preview)
+- 🩸 Blood Pressure (systolic/diastolic)
+- 🔥 Calories consumed / burned
+- 😴 Sleep hours
+- 👣 Steps count
+- 💧 Water intake (glasses)
+- ☕ Caffeine (cups)
+- 🕐 Fasting hours (intermittent/Ramadan)
+- 🏋️ Workout duration + type (cardio/weights/walk/swim/cycling/treadmill)
+- 😊 Mood (emoji selection)
+
+**📊 Charts & Insights:**
+- Weight trend line chart (30 days) with target weight goal line
+- Steps bar chart (7 days)
+- Sleep bar chart (7 days)
+- Summary stats cards (7-day averages, today's water, blood pressure)
+
+**📋 History:** Scrollable log of all entries, tap to edit any past entry.
 
 ### 🕌 Prayer Times (NEW)
 
@@ -122,7 +138,7 @@ expenses, categories, budgets, notes, taskLists, healthLogs
 
 ### Key Design Decisions
 
-**Single-File Architecture** — The entire application (HTML, CSS, JS, icons, service worker, manifest) lives in one `goal-tracker.html` file (~2,000 lines). This makes deployment as simple as copying one file and enables hosting on GitHub Pages with zero build step.
+**Single-File Architecture** — The entire application (HTML, CSS, JS, icons, service worker, manifest) lives in one `goal-tracker.html` file (~2,170 lines). This makes deployment as simple as copying one file and enables hosting on GitHub Pages with zero build step.
 
 **Offline-First** — The service worker caches all assets on first load. External API calls (weather, prayer times, exchange rates) are excluded from the cache and fail gracefully. All data persists in IndexedDB.
 
@@ -180,11 +196,13 @@ The app shows a warning banner if no backup has been taken in 7+ days.
 ### Health Tracking
 
 - Tap **💚 Health** in the bottom navigation
-- Use **"Log Today"** button for daily entries
-- Set your height once — it persists across sessions for automatic BMI calculation
-- View 7-day trends in the steps chart and history log
+- **First time:** Tap "Setup Profile" to enter height, target weight, age, and gender
+- Use **"Log Today"** for quick daily entries (weight, BP, sleep, steps, water, etc.)
+- BMI is auto-calculated and shown as a colored gauge in your Body Profile
+- Update body measurements (waist, body fat %) monthly via the Profile edit button
+- View weight trends over 30 days with your target weight as a goal line
 - Track fasting windows (great for Ramadan or intermittent fasting)
-- Log treadmill/cardio duration per session
+- Log workout type and duration per session
 
 ### Budget Management
 
@@ -247,9 +265,9 @@ Lines 200-520    → Utility functions, IndexedDB, i18n
 Lines 520-1060   → Components (StatsBar, Calendar, Dashboard, Today, MeetingsPage)
 Lines 1060-1460  → Expense system (modals, charts, budgets)
 Lines 1460-1650  → Notes system
-Lines 1650-1770  → Health tracker
-Lines 1770-1850  → Prayer times, LiveWidget
-Lines 1850-2001  → App shell, routing, settings
+Lines 1650-1925  → Health tracker (profile, daily log, BMI gauge, charts)
+Lines 1925-2010  → Prayer times, LiveWidget
+Lines 2010-2168  → App shell, routing, settings
 ```
 
 ---

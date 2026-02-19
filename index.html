@@ -1654,64 +1654,191 @@ return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{
 function Health({data,language,onSaveHealth,onDeleteHealth,toast}){
   const logs=useMemo(()=>(data.healthLogs||[]).sort((a,b)=>b.date.localeCompare(a.date)),[data.healthLogs]);
   const[logModal,setLogModal]=useState(null);
-  const[height,setHeight]=useState(()=>localStorage.getItem('gt-height')||'');
+  const[profileModal,setProfileModal]=useState(false);
+  const[chartTab,setChartTab]=useState('weight');
+
+  // Body Profile (persisted in localStorage)
+  const defProfile={height:'',targetWeight:'',age:'',gender:'male',waist:'',bodyFat:''};
+  const[profile,setProfile]=useState(()=>{try{return{...defProfile,...JSON.parse(localStorage.getItem('gt-health-profile')||'{}')};}catch(e){return defProfile;}});
+  const saveProfile=(p)=>{setProfile(p);localStorage.setItem('gt-health-profile',JSON.stringify(p));};
 
   const today=localDS();
   const todayLog=logs.find(l=>l.date===today);
 
+  // Helpers
   const bmi=(w,h)=>{if(!w||!h)return null;const hm=h/100;return(w/(hm*hm)).toFixed(1);};
   const bmiLabel=(v,lang)=>{if(!v)return'';const n=parseFloat(v);if(n<18.5)return lang==='ar'?'نحافة':'Underweight';if(n<25)return lang==='ar'?'طبيعي':'Normal';if(n<30)return lang==='ar'?'زيادة وزن':'Overweight';return lang==='ar'?'سمنة':'Obese';};
-  const bmiColor=(v)=>{if(!v)return'var(--text2)';const n=parseFloat(v);if(n<18.5)return'var(--electric)';if(n<25)return'var(--lime)';if(n<30)return'var(--gold)';return'var(--coral)';};
+  const bmiColor=(v)=>{if(!v)return'var(--text2)';const n=parseFloat(v);if(n<18.5)return'#54A0FF';if(n<25)return'var(--lime)';if(n<30)return'var(--gold)';return'var(--coral)';};
   const fmtH=(mins)=>{if(!mins)return'—';const h=Math.floor(mins/60),m=mins%60;return h>0?`${h}${T('س','h',language)} ${m>0?m+T('د','m',language):''}`:m+T('د','m',language);};
 
-  // Last 7 days chart data
-  const last7=useMemo(()=>{const d=[];for(let i=6;i>=0;i--){const dt=new Date();dt.setDate(dt.getDate()-i);const ds=localDS(dt);const log=logs.find(l=>l.date===ds);d.push({date:ds,day:dt.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'short'}),weight:log?.weight||null,steps:log?.steps||0,sleep:log?.sleepMinutes||0,fasting:log?.fastingHours||0});}return d;},[logs,language]);
+  const latestWeight=logs.find(l=>l.weight)?.weight;
+  const currentBMI=latestWeight&&profile.height?bmi(latestWeight,parseFloat(profile.height)):null;
 
-  const saveHeight=(v)=>{setHeight(v);localStorage.setItem('gt-height',v);};
+  // Chart data
+  const last7=useMemo(()=>{const d=[];for(let i=6;i>=0;i--){const dt=new Date();dt.setDate(dt.getDate()-i);const ds=localDS(dt);const log=logs.find(l=>l.date===ds);d.push({date:ds,day:dt.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'short'}),weight:log?.weight||null,steps:log?.steps||0,sleep:log?.sleepMinutes||0});}return d;},[logs,language]);
 
-  const HealthLogModal=({log,onClose})=>{
-    const isE=log&&log.id&&!log._isNew;
-    const[f,setF]=useState(()=>isE?{...log}:{date:log?.date||today,weight:'',sleepMinutes:'',steps:'',fastingHours:'',treadmillMinutes:'',notes:'',mood:''});
+  const last30w=useMemo(()=>{const d=[];for(let i=29;i>=0;i--){const dt=new Date();dt.setDate(dt.getDate()-i);const ds=localDS(dt);const log=logs.find(l=>l.date===ds);if(log?.weight)d.push({date:ds,day:dt.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short'}),weight:log.weight});}return d;},[logs,language]);
+
+  // Weight change
+  const weightChange=useMemo(()=>{const wLogs=logs.filter(l=>l.weight);if(wLogs.length<2)return null;return(wLogs[0].weight-wLogs[1].weight).toFixed(1);},[logs]);
+
+  // Averages
+  const avgSleep7=last7.filter(d=>d.sleep>0);
+  const avgSleepVal=avgSleep7.length?Math.round(avgSleep7.reduce((s,d)=>s+d.sleep,0)/avgSleep7.length):0;
+  const totalSteps7=last7.reduce((s,d)=>s+(d.steps||0),0);
+
+  // ---- BMI GAUGE ----
+  const BMIGauge=({value})=>{
+    if(!value)return null;
+    const v=parseFloat(value);const min=15,max=40;
+    const pct=Math.max(0,Math.min(100,((v-min)/(max-min))*100));
+    const zones=[{l:0,r:14,c:'#54A0FF',lb:T('نحافة','Under',language)},{l:14,r:40,c:'var(--lime)',lb:T('طبيعي','Normal',language)},{l:40,r:60,c:'var(--gold)',lb:T('زيادة','Over',language)},{l:60,r:100,c:'var(--coral)',lb:T('سمنة','Obese',language)}];
+    return(<div style={{position:'relative',height:32,borderRadius:16,overflow:'hidden',background:'var(--bg3)',marginTop:8}}>
+      {zones.map((z,i)=>(<div key={i} style={{position:'absolute',left:z.l+'%',width:(z.r-z.l)+'%',height:'100%',background:z.c+'33'}}/>))}
+      <div style={{position:'absolute',left:`calc(${pct}% - 2px)`,top:0,width:4,height:'100%',background:bmiColor(value),borderRadius:2,boxShadow:`0 0 8px ${bmiColor(value)}`}}/>
+      <div style={{position:'absolute',left:`calc(${pct}% - 16px)`,top:-20,fontSize:11,fontWeight:800,color:bmiColor(value)}}>{value}</div>
+      <div style={{display:'flex',height:'100%'}}>
+        {zones.map((z,i)=>(<div key={i} style={{flex:z.r-z.l,display:'flex',alignItems:'center',justifyContent:'center',fontSize:9,fontWeight:700,color:z.c,opacity:.8}}>{z.lb}</div>))}
+      </div>
+    </div>);
+  };
+
+  // ---- PROFILE MODAL ----
+  const ProfileModal=()=>{
+    const[f,setF]=useState({...profile});
     const u=(k,v)=>setF(p=>({...p,[k]:v}));
-    const moods=['😊','😐','😴','😤','🤒','💪','😎'];
     return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:420,maxHeight:'90dvh',overflow:'auto'}}>
-      <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>{isE?'✏️':'💚'} {T('سجل صحي','Health Log',language)} — {new Date(f.date+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short'})}</h3></div>
+      <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>👤 {T('ملف الجسم','Body Profile',language)}</h3></div>
       <div style={{padding:20,display:'flex',flexDirection:'column',gap:14}}>
-        <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('التاريخ','Date',language)}</label><input className="field" type="date" value={f.date} onChange={e=>u('date',e.target.value)}/></div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>⚖️ {T('الوزن (كجم)','Weight (kg)',language)}</label><input className="field" type="number" step="0.1" value={f.weight||''} onChange={e=>u('weight',e.target.value)} placeholder="75.5"/></div>
-          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>📏 {T('الطول (سم)','Height (cm)',language)}</label><input className="field" type="number" value={height} onChange={e=>saveHeight(e.target.value)} placeholder="175"/></div>
-        </div>
-        {f.weight&&height&&<div style={{textAlign:'center',padding:10,borderRadius:10,background:bmiColor(bmi(parseFloat(f.weight),parseFloat(height)))+'18',border:`1px solid ${bmiColor(bmi(parseFloat(f.weight),parseFloat(height)))}`}}>
-          <div style={{fontSize:24,fontWeight:900,color:bmiColor(bmi(parseFloat(f.weight),parseFloat(height)))}}>{bmi(parseFloat(f.weight),parseFloat(height))}</div>
-          <div style={{fontSize:12,fontWeight:700,color:bmiColor(bmi(parseFloat(f.weight),parseFloat(height)))}}>{T('مؤشر كتلة الجسم','BMI',language)} — {bmiLabel(bmi(parseFloat(f.weight),parseFloat(height)),language)}</div>
-        </div>}
-        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>😴 {T('النوم (ساعات)','Sleep (hours)',language)}</label><input className="field" type="number" step="0.5" value={f.sleepMinutes?f.sleepMinutes/60:''} onChange={e=>u('sleepMinutes',Math.round(parseFloat(e.target.value||0)*60))} placeholder="7.5"/></div>
-          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>👣 {T('الخطوات','Steps',language)}</label><input className="field" type="number" value={f.steps||''} onChange={e=>u('steps',e.target.value)} placeholder="8000"/></div>
+          <div><label className="label">📏 {T('الطول (سم)','Height (cm)',language)}</label><input className="field" type="number" value={f.height||''} onChange={e=>u('height',e.target.value)} placeholder="175"/></div>
+          <div><label className="label">🎯 {T('الوزن المستهدف','Target Weight',language)}</label><input className="field" type="number" step="0.1" value={f.targetWeight||''} onChange={e=>u('targetWeight',e.target.value)} placeholder="70"/></div>
         </div>
         <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>🕐 {T('الصيام (ساعات)','Fasting (hours)',language)}</label><input className="field" type="number" step="0.5" value={f.fastingHours||''} onChange={e=>u('fastingHours',e.target.value)} placeholder="16"/></div>
-          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>🏃 {T('المشاية (دقيقة)','Treadmill (min)',language)}</label><input className="field" type="number" value={f.treadmillMinutes||''} onChange={e=>u('treadmillMinutes',e.target.value)} placeholder="30"/></div>
+          <div><label className="label">🎂 {T('العمر','Age',language)}</label><input className="field" type="number" value={f.age||''} onChange={e=>u('age',e.target.value)} placeholder="30"/></div>
+          <div><label className="label">👤 {T('الجنس','Gender',language)}</label><select className="field" value={f.gender||'male'} onChange={e=>u('gender',e.target.value)}><option value="male">{T('ذكر','Male',language)}</option><option value="female">{T('أنثى','Female',language)}</option></select></div>
         </div>
-        <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>😊 {T('المزاج','Mood',language)}</label><div style={{display:'flex',gap:6}}>{moods.map(em=>(<div key={em} onClick={()=>u('mood',em)} style={{width:36,height:36,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,cursor:'pointer',border:`2px solid ${f.mood===em?'var(--teal)':'var(--border)'}`,background:f.mood===em?'var(--teal-g)':'transparent'}}>{em}</div>))}</div></div>
-        <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>📝 {T('ملاحظات','Notes',language)}</label><textarea className="field" rows={2} value={f.notes||''} onChange={e=>u('notes',e.target.value)}/></div>
+        <div style={{fontSize:13,fontWeight:700,color:'var(--teal)',marginTop:8}}>📐 {T('قياسات الجسم (شهرية)','Body Measurements (monthly)',language)}</div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div><label className="label">📐 {T('محيط الخصر (سم)','Waist (cm)',language)}</label><input className="field" type="number" step="0.5" value={f.waist||''} onChange={e=>u('waist',e.target.value)} placeholder="85"/></div>
+          <div><label className="label">📐 {T('نسبة الدهون %','Body Fat %',language)}</label><input className="field" type="number" step="0.1" value={f.bodyFat||''} onChange={e=>u('bodyFat',e.target.value)} placeholder="20"/></div>
+        </div>
       </div>
       <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}>
-        {isE&&<button className="btn btn-ghost" style={{color:'var(--coral)',marginLeft:'auto',marginRight:'auto'}} onClick={()=>{onDeleteHealth(log);onClose();}}>🗑️</button>}
-        <button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button>
-        <button className="btn btn-teal" onClick={()=>{const item={...f,id:f.id||uid(),weight:f.weight?parseFloat(f.weight):null,steps:f.steps?parseInt(f.steps):null,sleepMinutes:f.sleepMinutes?parseInt(f.sleepMinutes):null,fastingHours:f.fastingHours?parseFloat(f.fastingHours):null,treadmillMinutes:f.treadmillMinutes?parseInt(f.treadmillMinutes):null,height:height?parseFloat(height):null,bmi:f.weight&&height?parseFloat(bmi(parseFloat(f.weight),parseFloat(height))):null,createdAt:f.createdAt||new Date().toISOString()};onSaveHealth(item);onClose();}}>💚 {T('حفظ','Save',language)}</button>
+        <button className="btn btn-ghost" onClick={()=>setProfileModal(false)}>{T('إلغاء','Cancel',language)}</button>
+        <button className="btn btn-teal" onClick={()=>{saveProfile(f);setProfileModal(false);toast(T('تم حفظ الملف 👤','Profile saved 👤',language));}}>💾 {T('حفظ','Save',language)}</button>
       </div>
     </div></div>);
   };
 
-  // Stats cards
-  const latestWeight=logs.find(l=>l.weight)?.weight;
-  const latestBMI=latestWeight&&height?bmi(latestWeight,parseFloat(height)):null;
-  const avgSleep7=last7.filter(d=>d.sleep>0);
-  const avgSleepVal=avgSleep7.length?Math.round(avgSleep7.reduce((s,d)=>s+d.sleep,0)/avgSleep7.length):0;
-  const totalSteps7=last7.reduce((s,d)=>s+(d.steps||0),0);
-  const maxW=Math.max(...last7.map(d=>d.steps||0),1);
+  // ---- DAILY LOG MODAL ----
+  const DailyLogModal=({log,onClose})=>{
+    const isE=log&&log.id&&!log._isNew;
+    const[f,setF]=useState(()=>isE?{...log}:{date:log?.date||today,weight:'',sleepMinutes:'',steps:'',fastingHours:'',workoutMinutes:'',workoutType:'',caloriesIn:'',caloriesOut:'',bpSystolic:'',bpDiastolic:'',waterGlasses:'',caffeineCups:'',mood:'',notes:''});
+    const u=(k,v)=>setF(p=>({...p,[k]:v}));
+    const moods=['😊','😐','😴','😤','🤒','💪','😎','🥱'];
+    const workoutTypes=[{v:'cardio',l:'🏃 '+T('كارديو','Cardio',language)},{v:'weights',l:'🏋️ '+T('أوزان','Weights',language)},{v:'walk',l:'🚶 '+T('مشي','Walk',language)},{v:'swim',l:'🏊 '+T('سباحة','Swim',language)},{v:'cycling',l:'🚴 '+T('دراجة','Cycling',language)},{v:'treadmill',l:'🏃 '+T('مشاية','Treadmill',language)},{v:'other',l:'⚡ '+T('أخرى','Other',language)}];
+    const lbl=(t)=><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{t}</label>;
+    const curBMI=f.weight&&profile.height?bmi(parseFloat(f.weight),parseFloat(profile.height)):null;
+    return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:440,maxHeight:'90dvh',overflow:'auto'}}>
+      <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}><h3 style={{fontSize:16,fontWeight:800}}>{isE?'✏️':'💚'} {T('سجل يومي','Daily Log',language)}</h3><span style={{fontSize:12,color:'var(--text2)',fontWeight:600}}>{new Date(f.date+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',weekday:'short'})}</span></div>
+      <div style={{padding:20,display:'flex',flexDirection:'column',gap:12}}>
+        <div>{lbl(T('📅 التاريخ','📅 Date',language))}<input className="field" type="date" value={f.date} onChange={e=>u('date',e.target.value)}/></div>
+
+        {/* Weight + BMI */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div>{lbl('⚖️ '+T('الوزن (كجم)','Weight (kg)',language))}<input className="field" type="number" step="0.1" value={f.weight||''} onChange={e=>u('weight',e.target.value)} placeholder="75.5"/></div>
+          <div style={{display:'flex',alignItems:'flex-end',padding:'0 0 8px 0'}}>{curBMI&&<div style={{textAlign:'center',flex:1}}><div style={{fontSize:22,fontWeight:900,color:bmiColor(curBMI)}}>{curBMI}</div><div style={{fontSize:10,fontWeight:700,color:bmiColor(curBMI)}}>BMI — {bmiLabel(curBMI,language)}</div></div>}</div>
+        </div>
+
+        {/* Blood Pressure */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div>{lbl('🩸 '+T('ضغط الدم (عالي)','BP Systolic',language))}<input className="field" type="number" value={f.bpSystolic||''} onChange={e=>u('bpSystolic',e.target.value)} placeholder="120"/></div>
+          <div>{lbl('🩸 '+T('ضغط الدم (منخفض)','BP Diastolic',language))}<input className="field" type="number" value={f.bpDiastolic||''} onChange={e=>u('bpDiastolic',e.target.value)} placeholder="80"/></div>
+        </div>
+
+        {/* Calories */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div>{lbl('🔥 '+T('سعرات مستهلكة','Calories In',language))}<input className="field" type="number" value={f.caloriesIn||''} onChange={e=>u('caloriesIn',e.target.value)} placeholder="2000"/></div>
+          <div>{lbl('🔥 '+T('سعرات محروقة','Calories Out',language))}<input className="field" type="number" value={f.caloriesOut||''} onChange={e=>u('caloriesOut',e.target.value)} placeholder="500"/></div>
+        </div>
+
+        {/* Sleep + Steps */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div>{lbl('😴 '+T('النوم (ساعات)','Sleep (hours)',language))}<input className="field" type="number" step="0.5" value={f.sleepMinutes?f.sleepMinutes/60:''} onChange={e=>u('sleepMinutes',Math.round(parseFloat(e.target.value||0)*60))} placeholder="7.5"/></div>
+          <div>{lbl('👣 '+T('الخطوات','Steps',language))}<input className="field" type="number" value={f.steps||''} onChange={e=>u('steps',e.target.value)} placeholder="8000"/></div>
+        </div>
+
+        {/* Water + Caffeine */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div>{lbl('💧 '+T('ماء (أكواب)','Water (glasses)',language))}<input className="field" type="number" value={f.waterGlasses||''} onChange={e=>u('waterGlasses',e.target.value)} placeholder="8"/></div>
+          <div>{lbl('☕ '+T('كافيين (أكواب)','Caffeine (cups)',language))}<input className="field" type="number" value={f.caffeineCups||''} onChange={e=>u('caffeineCups',e.target.value)} placeholder="2"/></div>
+        </div>
+
+        {/* Fasting + Workout */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div>{lbl('🕐 '+T('الصيام (ساعات)','Fasting (hrs)',language))}<input className="field" type="number" step="0.5" value={f.fastingHours||''} onChange={e=>u('fastingHours',e.target.value)} placeholder="16"/></div>
+          <div>{lbl('🏋️ '+T('التمرين (دقيقة)','Workout (min)',language))}<input className="field" type="number" value={f.workoutMinutes||''} onChange={e=>u('workoutMinutes',e.target.value)} placeholder="45"/></div>
+        </div>
+
+        {/* Workout Type */}
+        {f.workoutMinutes>0&&<div>{lbl('🏷️ '+T('نوع التمرين','Workout Type',language))}<div style={{display:'flex',gap:4,flexWrap:'wrap'}}>{workoutTypes.map(wt=>(<div key={wt.v} onClick={()=>u('workoutType',wt.v)} style={{padding:'5px 10px',borderRadius:8,fontSize:11,fontWeight:700,cursor:'pointer',border:`2px solid ${f.workoutType===wt.v?'var(--teal)':'var(--border)'}`,background:f.workoutType===wt.v?'var(--teal-g)':'transparent',color:f.workoutType===wt.v?'var(--teal)':'var(--text2)'}}>{wt.l}</div>))}</div></div>}
+
+        {/* Mood */}
+        <div>{lbl('😊 '+T('المزاج','Mood',language))}<div style={{display:'flex',gap:5}}>{moods.map(em=>(<div key={em} onClick={()=>u('mood',em)} style={{width:36,height:36,borderRadius:10,display:'flex',alignItems:'center',justifyContent:'center',fontSize:20,cursor:'pointer',border:`2px solid ${f.mood===em?'var(--teal)':'var(--border)'}`,background:f.mood===em?'var(--teal-g)':'transparent'}}>{em}</div>))}</div></div>
+
+        <div>{lbl('📝 '+T('ملاحظات','Notes',language))}<textarea className="field" rows={2} value={f.notes||''} onChange={e=>u('notes',e.target.value)}/></div>
+      </div>
+      <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}>
+        {isE&&<button className="btn btn-ghost" style={{color:'var(--coral)',marginRight:'auto'}} onClick={()=>{onDeleteHealth(log);onClose();}}>🗑️</button>}
+        <button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button>
+        <button className="btn btn-teal" onClick={()=>{
+          const item={...f,id:f.id||uid(),
+            weight:f.weight?parseFloat(f.weight):null,steps:f.steps?parseInt(f.steps):null,
+            sleepMinutes:f.sleepMinutes?parseInt(f.sleepMinutes):null,fastingHours:f.fastingHours?parseFloat(f.fastingHours):null,
+            workoutMinutes:f.workoutMinutes?parseInt(f.workoutMinutes):null,
+            caloriesIn:f.caloriesIn?parseInt(f.caloriesIn):null,caloriesOut:f.caloriesOut?parseInt(f.caloriesOut):null,
+            bpSystolic:f.bpSystolic?parseInt(f.bpSystolic):null,bpDiastolic:f.bpDiastolic?parseInt(f.bpDiastolic):null,
+            waterGlasses:f.waterGlasses?parseInt(f.waterGlasses):null,caffeineCups:f.caffeineCups?parseInt(f.caffeineCups):null,
+            bmi:f.weight&&profile.height?parseFloat(bmi(parseFloat(f.weight),parseFloat(profile.height))):null,
+            createdAt:f.createdAt||new Date().toISOString()};
+          onSaveHealth(item);onClose();
+        }}>💚 {T('حفظ','Save',language)}</button>
+      </div>
+    </div></div>);
+  };
+
+  // ---- WEIGHT LINE CHART (SVG) ----
+  const WeightChart=()=>{
+    if(last30w.length<2)return <p style={{textAlign:'center',color:'var(--text2)',padding:20,fontSize:13}}>{T('سجل وزنك لمدة يومين على الأقل لعرض الرسم','Log weight for at least 2 days to see chart',language)}</p>;
+    const w=300,h=120,px=30,py=10;
+    const weights=last30w.map(d=>d.weight);const tgt=profile.targetWeight?parseFloat(profile.targetWeight):null;
+    const allW=[...weights];if(tgt)allW.push(tgt);
+    const minW=Math.min(...allW)-1,maxW=Math.max(...allW)+1;
+    const scX=(i)=>px+((w-2*px)/(last30w.length-1))*i;
+    const scY=(v)=>py+((maxW-v)/(maxW-minW))*(h-2*py);
+    const pts=last30w.map((d,i)=>`${scX(i)},${scY(d.weight)}`).join(' ');
+    return(<svg viewBox={`0 0 ${w} ${h+20}`} style={{width:'100%',height:'auto'}}>
+      {tgt&&<><line x1={px} y1={scY(tgt)} x2={w-px} y2={scY(tgt)} stroke="var(--gold)" strokeWidth="1" strokeDasharray="4,3" opacity=".6"/>
+      <text x={w-px+3} y={scY(tgt)+3} fill="var(--gold)" fontSize="8" fontWeight="700">{T('هدف','Goal',language)}</text></>}
+      <polyline points={pts} fill="none" stroke="var(--teal)" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round"/>
+      {last30w.map((d,i)=>(<circle key={i} cx={scX(i)} cy={scY(d.weight)} r="3.5" fill="var(--teal)" stroke="var(--bg2)" strokeWidth="1.5"/>))}
+      {last30w.map((d,i)=>i===0||i===last30w.length-1?(<text key={'t'+i} x={scX(i)} y={scY(d.weight)-8} fill="var(--teal)" fontSize="9" fontWeight="800" textAnchor="middle">{d.weight}</text>):null)}
+      {last30w.filter((_,i)=>i===0||i===last30w.length-1||i===Math.floor(last30w.length/2)).map((d,i)=>(<text key={'lb'+i} x={scX(last30w.indexOf(d))} y={h+14} fill="var(--text2)" fontSize="7" fontWeight="600" textAnchor="middle">{d.day}</text>))}
+    </svg>);
+  };
+
+  // ---- BAR CHART (reusable) ----
+  const BarChart7=({dataKey,color,unit})=>{
+    const maxV=Math.max(...last7.map(d=>d[dataKey]||0),1);
+    return(<div style={{display:'flex',alignItems:'flex-end',gap:6,height:90}}>
+      {last7.map((d,i)=>{const v=d[dataKey]||0;return(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+        {v>0&&<span style={{fontSize:8,fontWeight:700,color}}>{dataKey==='sleep'?fmtH(v):v.toLocaleString()}</span>}
+        <div style={{width:'100%',height:`${Math.max((v/maxV)*65,2)}px`,background:v>0?`linear-gradient(180deg,${color},${color}88)`:'var(--bg3)',borderRadius:'5px 5px 0 0',transition:'height .3s'}}/>
+        <span style={{fontSize:9,color:'var(--text2)',fontWeight:600}}>{d.day}</span>
+      </div>);})}
+    </div>);
+  };
 
   return(<div style={{display:'flex',flexDirection:'column',gap:14}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
@@ -1721,48 +1848,77 @@ function Health({data,language,onSaveHealth,onDeleteHealth,toast}){
       </button>
     </div>
 
-    {/* Summary Cards */}
-    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(100px,1fr))',gap:8}}>
-      <div className="stat-card"><span className="sv" style={{color:'var(--teal)',fontSize:20}}>{latestWeight?latestWeight+' kg':'—'}</span><span className="sl">⚖️ {T('الوزن','Weight',language)}</span></div>
-      <div className="stat-card"><span className="sv" style={{color:bmiColor(latestBMI),fontSize:20}}>{latestBMI||'—'}</span><span className="sl">📊 BMI</span></div>
-      <div className="stat-card"><span className="sv" style={{color:'var(--electric)',fontSize:20}}>{avgSleepVal?fmtH(avgSleepVal):'—'}</span><span className="sl">😴 {T('معدل النوم','Avg Sleep',language)}</span></div>
-      <div className="stat-card"><span className="sv" style={{color:'var(--gold)',fontSize:20}}>{totalSteps7?totalSteps7.toLocaleString():'—'}</span><span className="sl">👣 {T('خطوات ٧ أيام','7d Steps',language)}</span></div>
-    </div>
-
-    {/* Steps Chart */}
-    <div className="card" style={{padding:16}}>
-      <h3 style={{fontSize:14,fontWeight:800,marginBottom:12}}>👣 {T('الخطوات — آخر ٧ أيام','Steps — Last 7 Days',language)}</h3>
-      <div style={{display:'flex',alignItems:'flex-end',gap:6,height:100}}>
-        {last7.map((d,i)=>(<div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:4}}>
-          <div className="chart-bar" style={{width:'100%',height:`${Math.max((d.steps/maxW)*80,2)}px`,background:d.steps>0?'linear-gradient(180deg,var(--teal),var(--lime))':'var(--bg3)',borderRadius:'6px 6px 0 0',transition:'height .3s'}}/>
-          <span style={{fontSize:9,color:'var(--text2)',fontWeight:600}}>{d.day}</span>
-        </div>))}
+    {/* ==== BODY PROFILE CARD ==== */}
+    <div className="card" style={{padding:16,position:'relative'}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+        <h3 style={{fontSize:14,fontWeight:800}}>👤 {T('ملف الجسم','Body Profile',language)}</h3>
+        <button className="btn btn-ghost btn-xs" onClick={()=>setProfileModal(true)}>✏️ {T('تعديل','Edit',language)}</button>
       </div>
+      {!profile.height?(<div style={{textAlign:'center',padding:16}}><p style={{color:'var(--text2)',fontSize:13,marginBottom:10}}>{T('أدخل بياناتك الأساسية أولاً','Set up your body profile first',language)}</p><button className="btn btn-teal btn-sm" onClick={()=>setProfileModal(true)}>👤 {T('إعداد الملف','Setup Profile',language)}</button></div>):(
+      <div>
+        <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(80px,1fr))',gap:8,marginBottom:8}}>
+          <div style={{textAlign:'center'}}><div style={{fontSize:18,fontWeight:900,color:'var(--teal)'}}>{latestWeight||'—'}<span style={{fontSize:11}}> kg</span></div><div style={{fontSize:10,color:'var(--text2)',fontWeight:600}}>⚖️ {T('الوزن','Weight',language)}</div></div>
+          <div style={{textAlign:'center'}}><div style={{fontSize:18,fontWeight:900,color:bmiColor(currentBMI)}}>{currentBMI||'—'}</div><div style={{fontSize:10,color:'var(--text2)',fontWeight:600}}>📊 BMI</div></div>
+          <div style={{textAlign:'center'}}><div style={{fontSize:18,fontWeight:900,color:'var(--gold)'}}>{profile.targetWeight||'—'}<span style={{fontSize:11}}> kg</span></div><div style={{fontSize:10,color:'var(--text2)',fontWeight:600}}>🎯 {T('الهدف','Target',language)}</div></div>
+          <div style={{textAlign:'center'}}><div style={{fontSize:18,fontWeight:900,color:'var(--text)'}}>{profile.height}<span style={{fontSize:11}}> cm</span></div><div style={{fontSize:10,color:'var(--text2)',fontWeight:600}}>📏 {T('الطول','Height',language)}</div></div>
+        </div>
+        {currentBMI&&<><div style={{fontSize:12,fontWeight:700,textAlign:'center',color:bmiColor(currentBMI)}}>{bmiLabel(currentBMI,language)}</div><BMIGauge value={currentBMI}/></>}
+        {weightChange!==null&&<div style={{textAlign:'center',marginTop:10,fontSize:12,fontWeight:700,color:parseFloat(weightChange)>0?'var(--coral)':parseFloat(weightChange)<0?'var(--lime)':'var(--text2)'}}>
+          {parseFloat(weightChange)>0?'📈':'📉'} {parseFloat(weightChange)>0?'+':''}{weightChange} kg {T('عن آخر قراءة','from last',language)}
+        </div>}
+        {(profile.waist||profile.bodyFat)&&<div style={{display:'flex',justifyContent:'center',gap:16,marginTop:10,fontSize:11,color:'var(--text2)'}}>
+          {profile.waist&&<span>📐 {T('الخصر','Waist',language)}: <strong>{profile.waist} cm</strong></span>}
+          {profile.bodyFat&&<span>📐 {T('الدهون','Fat',language)}: <strong>{profile.bodyFat}%</strong></span>}
+        </div>}
+      </div>)}
     </div>
 
-    {/* Log History */}
+    {/* ==== SUMMARY STATS ==== */}
+    <div style={{display:'grid',gridTemplateColumns:'repeat(auto-fit,minmax(90px,1fr))',gap:8}}>
+      <div className="stat-card"><span className="sv" style={{color:'var(--electric)',fontSize:18}}>{avgSleepVal?fmtH(avgSleepVal):'—'}</span><span className="sl">😴 {T('نوم ٧ أيام','7d Sleep',language)}</span></div>
+      <div className="stat-card"><span className="sv" style={{color:'var(--gold)',fontSize:18}}>{totalSteps7?totalSteps7.toLocaleString():'—'}</span><span className="sl">👣 {T('خطوات ٧ أيام','7d Steps',language)}</span></div>
+      {todayLog?.waterGlasses>0&&<div className="stat-card"><span className="sv" style={{color:'#54A0FF',fontSize:18}}>{todayLog.waterGlasses} 💧</span><span className="sl">{T('ماء اليوم','Water Today',language)}</span></div>}
+      {todayLog?.bpSystolic&&<div className="stat-card"><span className="sv" style={{color:'var(--coral)',fontSize:16}}>{todayLog.bpSystolic}/{todayLog.bpDiastolic}</span><span className="sl">🩸 {T('ضغط الدم','BP',language)}</span></div>}
+    </div>
+
+    {/* ==== CHARTS ==== */}
+    <div className="card" style={{padding:16}}>
+      <div style={{display:'flex',gap:4,marginBottom:12}}>
+        {[{k:'weight',l:T('⚖️ الوزن','⚖️ Weight',language)},{k:'steps',l:T('👣 خطوات','👣 Steps',language)},{k:'sleep',l:T('😴 نوم','😴 Sleep',language)}].map(t=>(<div key={t.k} onClick={()=>setChartTab(t.k)} style={{padding:'5px 12px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',background:chartTab===t.k?'var(--teal-g)':'transparent',color:chartTab===t.k?'var(--teal)':'var(--text2)',border:`1px solid ${chartTab===t.k?'var(--teal)':'transparent'}`}}>{t.l}</div>))}
+      </div>
+      {chartTab==='weight'&&<WeightChart/>}
+      {chartTab==='steps'&&<BarChart7 dataKey="steps" color="var(--teal)" unit=""/>}
+      {chartTab==='sleep'&&<BarChart7 dataKey="sleep" color="var(--electric)" unit=""/>}
+    </div>
+
+    {/* ==== HISTORY ==== */}
     <div className="card" style={{padding:16}}>
       <h3 style={{fontSize:14,fontWeight:800,marginBottom:12}}>📋 {T('السجل','History',language)}</h3>
       {!logs.length?<p style={{textAlign:'center',color:'var(--text2)',padding:20}}>💚 {T('سجل أول قراءة صحية!','Log your first health entry!',language)}</p>:
-      logs.slice(0,14).map(l=>{const bmiV=l.weight&&height?bmi(l.weight,parseFloat(height)):null;return(
+      logs.slice(0,20).map(l=>{const bmiV=l.weight&&profile.height?bmi(l.weight,parseFloat(profile.height)):null;return(
         <div key={l.id} onClick={()=>setLogModal(l)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 0',borderBottom:'1px solid var(--border)',cursor:'pointer'}}>
           <div style={{fontSize:20,width:36,textAlign:'center'}}>{l.mood||'📋'}</div>
           <div style={{flex:1,minWidth:0}}>
             <div style={{fontWeight:700,fontSize:13}}>{new Date(l.date+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',weekday:'short'})}</div>
-            <div style={{display:'flex',gap:6,flexWrap:'wrap',marginTop:3,fontSize:11,color:'var(--text2)'}}>
-              {l.weight&&<span>⚖️ {l.weight}kg</span>}
-              {bmiV&&<span style={{color:bmiColor(bmiV)}}>📊 {bmiV}</span>}
-              {l.sleepMinutes>0&&<span>😴 {fmtH(l.sleepMinutes)}</span>}
-              {l.steps>0&&<span>👣 {l.steps.toLocaleString()}</span>}
-              {l.fastingHours>0&&<span>🕐 {l.fastingHours}{T('س','h',language)}</span>}
-              {l.treadmillMinutes>0&&<span>🏃 {fmtH(l.treadmillMinutes)}</span>}
+            <div style={{display:'flex',gap:5,flexWrap:'wrap',marginTop:3,fontSize:10,color:'var(--text2)'}}>
+              {l.weight&&<span>⚖️{l.weight}</span>}
+              {bmiV&&<span style={{color:bmiColor(bmiV)}}>📊{bmiV}</span>}
+              {l.bpSystolic&&<span>🩸{l.bpSystolic}/{l.bpDiastolic}</span>}
+              {l.sleepMinutes>0&&<span>😴{fmtH(l.sleepMinutes)}</span>}
+              {l.steps>0&&<span>👣{l.steps.toLocaleString()}</span>}
+              {l.waterGlasses>0&&<span>💧{l.waterGlasses}</span>}
+              {l.caffeineCups>0&&<span>☕{l.caffeineCups}</span>}
+              {l.caloriesIn>0&&<span>🔥{l.caloriesIn}</span>}
+              {l.fastingHours>0&&<span>🕐{l.fastingHours}{T('س','h',language)}</span>}
+              {l.workoutMinutes>0&&<span>🏋️{l.workoutMinutes}{T('د','m',language)}</span>}
             </div>
           </div>
           <span style={{fontSize:12,color:'var(--text2)'}}>✏️</span>
         </div>
       );})}
     </div>
-    {logModal&&<HealthLogModal log={logModal} onClose={()=>setLogModal(null)}/>}
+    {logModal&&<DailyLogModal log={logModal} onClose={()=>setLogModal(null)}/>}
+    {profileModal&&<ProfileModal/>}
   </div>);
 }
 
