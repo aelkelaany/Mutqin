@@ -2016,78 +2016,137 @@ function getSentNotifs(){try{return JSON.parse(localStorage.getItem('gt-notif-se
 function markNotifSent(key){const s=getSentNotifs();s[key]=Date.now();const cutoff=Date.now()-86400000;Object.keys(s).forEach(k=>{if(s[k]<cutoff)delete s[k];});localStorage.setItem('gt-notif-sent',JSON.stringify(s));}
 function wasNotifSent(key){const s=getSentNotifs();return!!s[key];}
 
-async function requestNotifPermission(){
-  if(!('Notification' in window))return false;
-  if(Notification.permission==='granted')return true;
-  if(Notification.permission==='denied')return false;
-  const p=await Notification.requestPermission();
-  return p==='granted';
-}
-function sendNotif(title,body,icon,tag){
-  if(Notification.permission!=='granted')return;
-  try{new Notification(title,{body,icon:icon||'🔔',tag:tag||'mutqin-'+Date.now(),badge:'🔔',silent:false});}catch(e){console.warn('Notification error:',e);}
+// Sound alert using Web Audio API
+function playAlertSound(){
+  try{const ctx=new(window.AudioContext||window.webkitAudioContext)();
+  const osc=ctx.createOscillator();const gain=ctx.createGain();
+  osc.connect(gain);gain.connect(ctx.destination);
+  osc.frequency.setValueAtTime(880,ctx.currentTime);
+  osc.frequency.setValueAtTime(1100,ctx.currentTime+0.1);
+  osc.frequency.setValueAtTime(880,ctx.currentTime+0.2);
+  gain.gain.setValueAtTime(0.3,ctx.currentTime);
+  gain.gain.exponentialRampToValueAtTime(0.01,ctx.currentTime+0.5);
+  osc.start(ctx.currentTime);osc.stop(ctx.currentTime+0.5);
+  }catch(e){}
 }
 
-function NotifSettingsModal({language,onClose}){
+// Global in-app alert queue
+let _inAppAlertFn=null;
+function setInAppAlertFn(fn){_inAppAlertFn=fn;}
+function showInAppAlert(title,body){if(_inAppAlertFn)_inAppAlertFn({title,body,id:Date.now()});}
+
+function sendNotif(title,body,icon,tag){
+  // Always show in-app alert
+  showInAppAlert(title,body);
+  playAlertSound();
+  // Also try browser notification
+  if('Notification' in window && Notification.permission==='granted'){
+    try{new Notification(title,{body,icon:icon||'🔔',tag:tag||'mutqin-'+Date.now(),silent:false});}catch(e){console.warn('Notif error:',e);}
+  }
+}
+
+function NotifSettingsModal({language,onClose,toast}){
   const[s,setS]=useState(()=>getNotifSettings());
-  const u=(k,v)=>setS(p=>({...p,[k]:v}));
+  const u=(k,v)=>{const ns={...s,[k]:v};setS(ns);saveNotifSettings(ns);}; // auto-save on every change
   const[permStatus,setPermStatus]=useState(()=>'Notification' in window?Notification.permission:'unsupported');
-  const handleEnable=async()=>{const ok=await requestNotifPermission();if(ok){u('enabled',true);setPermStatus('granted');}else{setPermStatus(Notification.permission);}};
-  const save=()=>{saveNotifSettings(s);onClose();};
+  const[testSent,setTestSent]=useState(false);
+
+  const handleEnable=async()=>{
+    if(!('Notification' in window)){setPermStatus('unsupported');return;}
+    const p=await Notification.requestPermission();
+    setPermStatus(p);
+    if(p==='granted'){u('enabled',true);toast(T('تم تفعيل الإشعارات ✅','Notifications enabled ✅',language));}
+  };
+
+  const handleTest=()=>{
+    sendNotif('🔔 '+T('إشعار تجريبي','Test Notification',language),T('الإشعارات تعمل بنجاح! 🎉','Notifications are working! 🎉',language),'🔔','test-notif');
+    setTestSent(true);
+    setTimeout(()=>setTestSent(false),3000);
+  };
+
   const lbl=(t)=><label style={{fontSize:13,fontWeight:700,color:'var(--text)',display:'block'}}>{t}</label>;
   const sub=(t)=><span style={{fontSize:11,color:'var(--text2)',display:'block',marginTop:2}}>{t}</span>;
   const tog=(k,label,desc)=>(<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 0',borderBottom:'1px solid var(--border)'}}>
-    <div>{lbl(label)}{sub(desc)}</div>
-    <div onClick={()=>u(k,!s[k])} style={{width:48,height:28,borderRadius:14,background:s[k]?'var(--teal)':'var(--bg3)',cursor:'pointer',position:'relative',transition:'all .2s'}}>
+    <div style={{flex:1}}>{lbl(label)}{sub(desc)}</div>
+    <div onClick={()=>u(k,!s[k])} style={{width:48,height:28,borderRadius:14,background:s[k]?'var(--teal)':'var(--bg3)',cursor:'pointer',position:'relative',transition:'all .2s',flexShrink:0}}>
       <div style={{width:22,height:22,borderRadius:11,background:'white',position:'absolute',top:3,left:s[k]?23:3,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.2)'}}/>
     </div>
   </div>);
+
   return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:420,maxHeight:'90dvh',overflow:'auto'}}>
     <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>🔔 {T('إعدادات الإشعارات','Notification Settings',language)}</h3></div>
     <div style={{padding:20,display:'flex',flexDirection:'column',gap:4}}>
 
-      {/* Permission Status */}
-      {permStatus==='unsupported'?(<div style={{background:'var(--coral-g)',border:'1px solid var(--coral)',borderRadius:12,padding:14,textAlign:'center'}}><div style={{fontSize:14,fontWeight:700,color:'var(--coral)'}}>⚠️ {T('المتصفح لا يدعم الإشعارات','Browser does not support notifications',language)}</div></div>)
-      :permStatus==='denied'?(<div style={{background:'var(--coral-g)',border:'1px solid var(--coral)',borderRadius:12,padding:14,textAlign:'center'}}><div style={{fontSize:14,fontWeight:700,color:'var(--coral)'}}>🚫 {T('الإشعارات محظورة — فعلها من إعدادات المتصفح','Notifications blocked — enable from browser settings',language)}</div></div>)
-      :permStatus!=='granted'?(<div style={{textAlign:'center',padding:8}}><button className="btn btn-teal" onClick={handleEnable}>🔔 {T('تفعيل الإشعارات','Enable Notifications',language)}</button></div>)
-      :(<div style={{background:'var(--teal-g)',borderRadius:10,padding:'8px 14px',fontSize:12,color:'var(--teal)',fontWeight:700,textAlign:'center'}}>✅ {T('الإشعارات مفعلة','Notifications enabled',language)}</div>)}
+      {/* Permission + Enable */}
+      {permStatus==='unsupported'?(<div style={{background:'var(--gold-g)',border:'1px solid var(--gold)',borderRadius:12,padding:14,textAlign:'center'}}><div style={{fontSize:13,fontWeight:700,color:'var(--gold)'}}>⚠️ {T('المتصفح لا يدعم إشعارات النظام — التنبيهات الداخلية ستعمل','Browser doesn\'t support system notifications — in-app alerts will work',language)}</div></div>)
+      :permStatus==='denied'?(<div style={{background:'var(--coral-g)',border:'1px solid var(--coral)',borderRadius:12,padding:14,textAlign:'center'}}><div style={{fontSize:13,fontWeight:700,color:'var(--coral)'}}>🚫 {T('الإشعارات محظورة — التنبيهات الداخلية ستعمل. لتفعيل إشعارات النظام، اذهب لإعدادات المتصفح','Notifications blocked — in-app alerts will work. For system notifications, check browser settings',language)}</div></div>)
+      :permStatus!=='granted'?(<div style={{textAlign:'center',padding:12}}><button className="btn btn-teal" onClick={handleEnable} style={{fontSize:14,padding:'10px 24px'}}>🔔 {T('تفعيل الإشعارات','Enable Notifications',language)}</button><div style={{fontSize:11,color:'var(--text2)',marginTop:6}}>{T('سيطلب المتصفح إذنك','Browser will ask your permission',language)}</div></div>)
+      :(<div style={{background:'var(--teal-g)',borderRadius:10,padding:'8px 14px',fontSize:12,color:'var(--teal)',fontWeight:700,textAlign:'center'}}>✅ {T('إشعارات النظام مفعلة','System notifications enabled',language)}</div>)}
 
-      {/* Settings */}
-      <div style={{opacity:permStatus==='granted'?1:.4,pointerEvents:permStatus==='granted'?'auto':'none'}}>
+      {/* Master Toggle */}
+      {tog('enabled','🔔 '+T('تفعيل التنبيهات','Enable Alerts',language),T('تفعيل جميع التنبيهات الداخلية والإشعارات','Enable all in-app alerts and notifications',language))}
+
+      {/* Test Button */}
+      <div style={{textAlign:'center',padding:'10px 0',borderBottom:'1px solid var(--border)'}}>
+        <button className="btn btn-coral btn-sm" onClick={handleTest} disabled={testSent} style={{fontSize:13,padding:'8px 20px'}}>
+          {testSent?'✅ '+T('تم الإرسال!','Sent!',language):'🧪 '+T('إرسال إشعار تجريبي','Send Test Notification',language)}
+        </button>
+        <div style={{fontSize:10,color:'var(--text2)',marginTop:4}}>{T('ستسمع صوت وتظهر رسالة فورياً','You\'ll hear a sound and see a message immediately',language)}</div>
+      </div>
+
+      {/* Settings - always active since in-app alerts work regardless */}
+      <div style={{opacity:s.enabled?1:.4,pointerEvents:s.enabled?'auto':'none'}}>
 
         {/* Meeting */}
         <div style={{padding:'12px 0',borderBottom:'1px solid var(--border)'}}>
           {lbl('👥 '+T('تذكير الاجتماعات','Meeting Reminders',language))}
           {sub(T('قبل الاجتماع بكم دقيقة؟','How many minutes before?',language))}
-          <div style={{display:'flex',gap:6,marginTop:8}}>{[5,10,15,30,60].map(m=>(<div key={m} onClick={()=>u('meetingReminder',m)} style={{padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${s.meetingReminder===m?'var(--teal)':'var(--border)'}`,background:s.meetingReminder===m?'var(--teal-g)':'transparent',color:s.meetingReminder===m?'var(--teal)':'var(--text2)'}}>{m} {T('د','m',language)}</div>))}</div>
+          <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>{[5,10,15,30,60].map(m=>(<div key={m} onClick={()=>u('meetingReminder',m)} style={{padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${s.meetingReminder===m?'var(--teal)':'var(--border)'}`,background:s.meetingReminder===m?'var(--teal-g)':'transparent',color:s.meetingReminder===m?'var(--teal)':'var(--text2)'}}>{m} {T('د','m',language)}</div>))}</div>
         </div>
 
         {/* Prayer */}
         <div style={{padding:'12px 0',borderBottom:'1px solid var(--border)'}}>
           {lbl('🕌 '+T('تذكير الصلاة','Prayer Reminders',language))}
           {sub(T('قبل وقت الصلاة بكم دقيقة؟','Minutes before prayer?',language))}
-          <div style={{display:'flex',gap:6,marginTop:8}}>{[5,10,15,30].map(m=>(<div key={m} onClick={()=>u('prayerReminder',m)} style={{padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${s.prayerReminder===m?'var(--teal)':'var(--border)'}`,background:s.prayerReminder===m?'var(--teal-g)':'transparent',color:s.prayerReminder===m?'var(--teal)':'var(--text2)'}}>{m} {T('د','m',language)}</div>))}</div>
+          <div style={{display:'flex',gap:6,marginTop:8,flexWrap:'wrap'}}>{[5,10,15,30].map(m=>(<div key={m} onClick={()=>u('prayerReminder',m)} style={{padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${s.prayerReminder===m?'var(--teal)':'var(--border)'}`,background:s.prayerReminder===m?'var(--teal-g)':'transparent',color:s.prayerReminder===m?'var(--teal)':'var(--text2)'}}>{m} {T('د','m',language)}</div>))}</div>
         </div>
 
-        {tog('taskReminder','✅ '+T('تذكير المهام','Task Reminders',language),T('تذكير صباحي بمهام اليوم','Morning reminder for today\'s tasks',language))}
-        {tog('healthReminder','💚 '+T('تذكير السجل الصحي','Health Log Reminder',language),T('تذكير مسائي لتسجيل البيانات الصحية','Evening reminder to log health data',language))}
+        {tog('taskReminder','✅ '+T('تذكير المهام','Task Reminders',language),T('تذكير صباحي بمهام اليوم (٨ ص)','Morning reminder for today\'s tasks (8 AM)',language))}
+        {tog('healthReminder','💚 '+T('تذكير السجل الصحي','Health Log Reminder',language),T('تذكير مسائي لتسجيل البيانات الصحية (٩ م)','Evening reminder to log health data (9 PM)',language))}
         {tog('backupReminder','💾 '+T('تذكير النسخ الاحتياطي','Backup Reminder',language),T('تذكير أسبوعي بعمل نسخة احتياطية','Weekly backup reminder',language))}
       </div>
     </div>
-    <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}>
-      <button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button>
-      <button className="btn btn-teal" onClick={save}>💾 {T('حفظ','Save',language)}</button>
+    <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',textAlign:'center'}}>
+      <button className="btn btn-ghost" onClick={onClose}>{T('إغلاق','Close',language)}</button>
     </div>
   </div></div>);
+}
+
+// In-App Alert Banner Component
+function InAppAlerts({language}){
+  const[alerts,setAlerts]=useState([]);
+  useEffect(()=>{setInAppAlertFn(a=>setAlerts(p=>[a,...p].slice(0,5)));return()=>setInAppAlertFn(null);},[]);
+  const dismiss=(id)=>setAlerts(p=>p.filter(a=>a.id!==id));
+  useEffect(()=>{if(alerts.length>0){const t=setTimeout(()=>setAlerts(p=>p.slice(0,-1)),8000);return()=>clearTimeout(t);}},[alerts]);
+  if(!alerts.length)return null;
+  return(<div style={{position:'fixed',top:60,left:'50%',transform:'translateX(-50%)',zIndex:9998,display:'flex',flexDirection:'column',gap:8,width:'90%',maxWidth:380}}>
+    {alerts.map(a=>(<div key={a.id} style={{background:'var(--bg2)',border:'2px solid var(--teal)',borderRadius:16,padding:'12px 16px',boxShadow:'0 8px 32px rgba(0,0,0,.3)',animation:'fadeIn .3s ease',display:'flex',alignItems:'center',gap:10}}>
+      <div style={{flex:1}}>
+        <div style={{fontSize:13,fontWeight:800,color:'var(--teal)'}}>{a.title}</div>
+        <div style={{fontSize:12,color:'var(--text2)',marginTop:2}}>{a.body}</div>
+      </div>
+      <button onClick={()=>dismiss(a.id)} style={{background:'none',border:'none',fontSize:16,color:'var(--text2)',cursor:'pointer',padding:4}}>✕</button>
+    </div>))}
+  </div>);
 }
 
 function useNotifications(data,lang){
   const checkRef=useRef(null);
 
   useEffect(()=>{
-    const check=async()=>{
+    const check=()=>{
       const s=getNotifSettings();
-      if(!s.enabled||Notification.permission!=='granted')return;
+      if(!s.enabled)return;
       const now=new Date();
       const nowMs=now.getTime();
       const ts=localDS();
@@ -2097,7 +2156,7 @@ function useNotifications(data,lang){
         if(!m.meetingDate||m.meetingStatus==='cancelled')return;
         const mTime=new Date(m.meetingDate).getTime();
         const diff=(mTime-nowMs)/60000;
-        const key=`meet-${m.id}-${s.meetingReminder}`;
+        const key=`meet-${m.id}-${ts}`;
         if(diff>0&&diff<=s.meetingReminder&&!wasNotifSent(key)){
           sendNotif(
             '👥 '+m.title,
@@ -2121,7 +2180,7 @@ function useNotifications(data,lang){
             const diff=(pTime.getTime()-nowMs)/60000;
             const key=`prayer-${p}-${ts}`;
             if(diff>0&&diff<=s.prayerReminder&&!wasNotifSent(key)){
-              sendNotif('🕌 '+(pNames[p]||p),T(`حان وقت الصلاة بعد ${Math.round(diff)} دقيقة`,`Prayer time in ${Math.round(diff)} minutes`,lang),'🕌','prayer-'+p);
+              sendNotif('🕌 '+(pNames[p]||p),T(`حان وقت صلاة ${pNames[p]||p} بعد ${Math.round(diff)} دقيقة`,`${pNames[p]||p} prayer in ${Math.round(diff)} minutes`,lang),'🕌','prayer-'+p);
               markNotifSent(key);
             }
           });
@@ -2152,7 +2211,7 @@ function useNotifications(data,lang){
         }
       }
 
-      // 5. Backup reminder (check weekly)
+      // 5. Backup reminder (weekly)
       if(s.backupReminder){
         const lastExport=localStorage.getItem('gt-last-export');
         const daysSince=lastExport?Math.floor((nowMs-new Date(lastExport).getTime())/86400000):999;
@@ -2164,8 +2223,8 @@ function useNotifications(data,lang){
       }
     };
 
-    checkRef.current=setInterval(check,60000);
-    check(); // run immediately
+    check(); // run immediately on mount
+    checkRef.current=setInterval(check,60000); // then every minute
     return()=>clearInterval(checkRef.current);
   },[data,lang]);
 }
@@ -2317,6 +2376,7 @@ function App(){
         </>
       )}
       <Toasts toasts={toasts} onDismiss={id=>setToasts(p=>p.filter(t=>t.id!==id))}/>
+      <InAppAlerts language={lang}/>
       <Pomodoro language={lang}/>
       {modal&&<ItemModal type={modal.type} editItem={modal.editItem} goalId={modal.goalId} milestoneId={modal.milestoneId} language={lang} onSave={handleSave} onClose={()=>setModal(null)} allTasks={data.tasks||[]}/>}
       {listModal&&<ListModal editList={listModal.id?listModal:null} language={lang} onSave={handleSaveListModal} onClose={()=>setListModal(null)}/>}
@@ -2324,7 +2384,7 @@ function App(){
       {dayView&&<DayMod dateStr={dayView.dateStr} items={dayView.items} language={lang} onClose={()=>setDayView(null)} onAddTask={d=>handleAddFromDay('quickTask',d)} onAddMeeting={d=>handleAddFromDay('meeting',d)} onAddExpense={d=>{setDayView(null);setExpFromCal(d);}} onStatus={async(store,item,ns)=>{await handleStatus(store,item,ns);const ds=dayView.dateStr;const nd=await dAll('tasks'),nq=await dAll('quickTasks'),nm=await dAll('meetings');const ni=[];nd.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'task'});});nq.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'quickTask'});});nm.forEach(x=>{if(x.meetingDate&&x.meetingDate.startsWith(ds))ni.push({...x,_type:'meeting'});});setDayView({dateStr:ds,items:ni});}} onReorder={async(store,items)=>{await handleReorder(store,items);const ds=dayView.dateStr;const nd=await dAll('tasks'),nq=await dAll('quickTasks'),nm=await dAll('meetings');const ni=[];nd.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'task'});});nq.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'quickTask'});});nm.forEach(x=>{if(x.meetingDate&&x.meetingDate.startsWith(ds))ni.push({...x,_type:'meeting'});});setDayView({dateStr:ds,items:ni});}}/>}
       {expFromCal&&<ExpenseModal expense={{_isNew:true,date:expFromCal}} categories={data.categories||[]} budgets={data.budgets||[]} language={lang} onSave={async e=>{await handleSaveExpense(e);setExpFromCal(null);}} onClose={()=>setExpFromCal(null)}/>}
       {uploadModal&&<UploadModal language={lang} onImport={handleXlsxImport} onClose={()=>setUploadModal(false)}/>}
-      {notifModal&&<NotifSettingsModal language={lang} onClose={()=>setNotifModal(false)}/>}
+      {notifModal&&<NotifSettingsModal language={lang} toast={toast} onClose={()=>setNotifModal(false)}/>}
     </div>);
 }
 ReactDOM.render(<App/>,document.getElementById('root'));
