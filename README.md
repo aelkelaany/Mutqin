@@ -4,7 +4,7 @@
 
 ### نظام إدارة حياتك الشخصي | Personal Life Management System
 
-**v2.0.0** · Single-File PWA · Arabic-First · Offline-Ready
+**v2.1.0** · Single-File PWA · Arabic-First · Offline-Ready
 
 [Live Demo](https://aelkelaany.github.io/Mutqin/) · [Report Bug](https://github.com/aelkelaany/Mutqin/issues)
 
@@ -95,6 +95,18 @@ Location-based prayer times displayed via a dedicated icon (🕌) in the header 
 - **Passed prayers** dimmed automatically
 
 Uses the Aladhan API with Umm al-Qura calculation method (method 4). Falls back to Riyadh coordinates if geolocation is denied. Prayer data is fetched based on the user's current city via browser geolocation.
+
+### 🔔 Smart Notifications (NEW)
+
+Push notification system that works entirely client-side with no server required. Configure via the 🔔 bell icon in the header:
+
+- **👥 Meeting Reminders** — configurable: 5, 10, 15, 30, or 60 minutes before
+- **🕌 Prayer Reminders** — configurable: 5, 10, 15, or 30 minutes before next prayer
+- **✅ Task Reminders** — morning notification at 8 AM listing today's pending tasks
+- **💚 Health Log Reminder** — evening notification at 9 PM if no health data logged today
+- **💾 Backup Reminder** — weekly reminder if no export has been made in 7+ days
+
+Notifications use the browser Notification API and require one-time permission grant. Duplicate notifications are prevented using a 24-hour deduplication system.
 
 ### 📓 Notes (مفكرتي)
 
@@ -259,7 +271,7 @@ Inside `goal-tracker.html`:
 
 ```
 Lines 1-30       → HTML head, meta tags, PWA manifest
-Lines 31-56      → Inline Service Worker (cache: gt-v14)
+Lines 31-56      → Inline Service Worker (cache: gt-v15)
 Lines 57-200     → CSS (dark theme, light theme, components)
 Lines 200-520    → Utility functions, IndexedDB, i18n
 Lines 520-1060   → Components (StatsBar, Calendar, Dashboard, Today, MeetingsPage)
@@ -276,7 +288,8 @@ Lines 2010-2168  → App shell, routing, settings
 
 | Version | Cache | Changes |
 |---------|-------|---------|
-| gt-v14 | Current | 💚 Health tracker, 🕌 Prayer times, Meeting status (scheduled/cancelled/deferred) |
+| gt-v15 | Current | 🔔 Notification system, Health tab restructured (body profile + daily log + charts), new metrics |
+| gt-v14 | — | 💚 Health tracker, 🕌 Prayer times, Meeting status (scheduled/cancelled/deferred/done) |
 | gt-v13 | — | Today default tab, budget close feature, delete protection, date pre-fill fix |
 | gt-v12 | — | Light mode refinements, InfoBar removal |
 | gt-v11 | — | Gold API fix, light mode color tuning |

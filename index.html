@@ -44,7 +44,7 @@ document.head.appendChild(mLink);
 // Service Worker (inline)
 if ('serviceWorker' in navigator) {
   const swCode = `
-    const CACHE = 'gt-v14';
+    const CACHE = 'gt-v15';
     const URLS = ['./', 'https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js','https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js','https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js','https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css'];
     self.addEventListener('install', e => { e.waitUntil(caches.open(CACHE).then(c => c.addAll(URLS)).then(() => self.skipWaiting())); });
     self.addEventListener('activate', e => { e.waitUntil(caches.keys().then(ks => Promise.all(ks.filter(k => k !== CACHE).map(k => caches.delete(k)))).then(() => self.clients.claim())); });
@@ -265,8 +265,8 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 <body>
 <div id="root"></div>
 <script type="text/babel">
-const{useState,useEffect,useCallback,useMemo}=React;
-const APP_VERSION='1.0.0';
+const{useState,useEffect,useCallback,useMemo,useRef}=React;
+const APP_VERSION='2.1.0';
 const DB='GoalTrackerDB',VER=7,ST=['goals','milestones','tasks','quickTasks','taskLists','meetings','expenses','categories','budgets','notes','healthLogs'];
 const ICONS={goals:['🎯','🏆','💼','🎓','💪','🌟','🚀','📈','🏃‍♂️','💡','🎨','🔬','🏠','💰','❤️','🧠','🕌','📖','🤲','🌙','⭐','🔥','🏅','🎖️','💎','🗝️','🌍','🏋️','🧘','🎵','📚','🏗️','🔮','🎪','🦅','🌱','🏔️','⚡','🛡️','🧭'],milestones:['📍','🏁','🎖️','⭐','💎','🔑','🎯','📊','🏅','🔥','⚡','🌈','🕋','🌙','📖','🤲','🕌','☪️','🏆','👑','💫','🎗️','🔰','🌟','🎊','🏔️','🦁','✨','🔱','💠'],tasks:['✅','📝','✏️','📋','🔨','⚙️','🔧','💡','📱','📊','🎬','🔍','🎨','💻','📞','🧹','📖','🕌','🤲','🌙','🕋','☪️','🍽️','🍲','🔪','🛒','🚿','👔','🧕','📿','🕐','🕑','🕒','🕓','🕔','💼','📧','🗂️','📎','🖥️','📊','📄','🗳️','🤝','📌','🏷️','💳','📦','🔔','📢','🧪','🔬','📐','🖌️','📓','🏃','🧘','💊','🍎','💧','🧠','🔋','🌅','🌄','🌇','🌆','⏰','🎒','✈️','🚗','🏥','🛍️','🎁','💌','📸','🎶','🎮','📺','🧩','🏠','🌳','🐝','☕','🍵','🫖'],meetings:['👥','🤝','💬','📞','🎤','🏢','☕','🍽️','📹','🗣️','🎯','💼','🕌','📱','💻','🎪','📋','🏛️','🗓️','⏰','🔔','👨‍💼','👩‍💼','🧑‍🏫','🎓'],lists:['🛒','📞','📚','✈️','🏠','🎵','🎮','🧹','💊','📦','🎁','🍽️','👕','🔧','🏋️','🌱','📿','🕌','🤲','🍲','📖','☪️','🧕','🎒','💼','🧪','🩺','🎨','🎯','✨']};
 
@@ -1971,7 +1971,7 @@ function LiveWidget({language}){
       const today=new Date();const dd=String(today.getDate()).padStart(2,'0');const mm=String(today.getMonth()+1).padStart(2,'0');const yyyy=today.getFullYear();
       const r=await fetch(`https://api.aladhan.com/v1/timings/${dd}-${mm}-${yyyy}?latitude=${lat}&longitude=${lon}&method=4`);
       const d=await r.json();
-      if(d&&d.data&&d.data.timings)setPrayers(d.data.timings);
+      if(d&&d.data&&d.data.timings){setPrayers(d.data.timings);localStorage.setItem('gt-prayers',JSON.stringify(d.data.timings));}
     }catch(e){console.warn('Prayer API error:',e);}};
 
     const fetchCityName=async(lat,lon)=>{try{
@@ -2008,11 +2008,174 @@ function LiveWidget({language}){
   </>);
 }
 
+// ========== NOTIFICATION SYSTEM ==========
+const NOTIF_DEFAULTS={enabled:false,meetingReminder:15,prayerReminder:10,taskReminder:true,healthReminder:true,backupReminder:true};
+function getNotifSettings(){try{return{...NOTIF_DEFAULTS,...JSON.parse(localStorage.getItem('gt-notif')||'{}')};}catch(e){return NOTIF_DEFAULTS;}}
+function saveNotifSettings(s){localStorage.setItem('gt-notif',JSON.stringify(s));}
+function getSentNotifs(){try{return JSON.parse(localStorage.getItem('gt-notif-sent')||'{}');}catch(e){return{};}}
+function markNotifSent(key){const s=getSentNotifs();s[key]=Date.now();const cutoff=Date.now()-86400000;Object.keys(s).forEach(k=>{if(s[k]<cutoff)delete s[k];});localStorage.setItem('gt-notif-sent',JSON.stringify(s));}
+function wasNotifSent(key){const s=getSentNotifs();return!!s[key];}
+
+async function requestNotifPermission(){
+  if(!('Notification' in window))return false;
+  if(Notification.permission==='granted')return true;
+  if(Notification.permission==='denied')return false;
+  const p=await Notification.requestPermission();
+  return p==='granted';
+}
+function sendNotif(title,body,icon,tag){
+  if(Notification.permission!=='granted')return;
+  try{new Notification(title,{body,icon:icon||'🔔',tag:tag||'mutqin-'+Date.now(),badge:'🔔',silent:false});}catch(e){console.warn('Notification error:',e);}
+}
+
+function NotifSettingsModal({language,onClose}){
+  const[s,setS]=useState(()=>getNotifSettings());
+  const u=(k,v)=>setS(p=>({...p,[k]:v}));
+  const[permStatus,setPermStatus]=useState(()=>'Notification' in window?Notification.permission:'unsupported');
+  const handleEnable=async()=>{const ok=await requestNotifPermission();if(ok){u('enabled',true);setPermStatus('granted');}else{setPermStatus(Notification.permission);}};
+  const save=()=>{saveNotifSettings(s);onClose();};
+  const lbl=(t)=><label style={{fontSize:13,fontWeight:700,color:'var(--text)',display:'block'}}>{t}</label>;
+  const sub=(t)=><span style={{fontSize:11,color:'var(--text2)',display:'block',marginTop:2}}>{t}</span>;
+  const tog=(k,label,desc)=>(<div style={{display:'flex',justifyContent:'space-between',alignItems:'center',padding:'12px 0',borderBottom:'1px solid var(--border)'}}>
+    <div>{lbl(label)}{sub(desc)}</div>
+    <div onClick={()=>u(k,!s[k])} style={{width:48,height:28,borderRadius:14,background:s[k]?'var(--teal)':'var(--bg3)',cursor:'pointer',position:'relative',transition:'all .2s'}}>
+      <div style={{width:22,height:22,borderRadius:11,background:'white',position:'absolute',top:3,left:s[k]?23:3,transition:'left .2s',boxShadow:'0 1px 3px rgba(0,0,0,.2)'}}/>
+    </div>
+  </div>);
+  return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:420,maxHeight:'90dvh',overflow:'auto'}}>
+    <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>🔔 {T('إعدادات الإشعارات','Notification Settings',language)}</h3></div>
+    <div style={{padding:20,display:'flex',flexDirection:'column',gap:4}}>
+
+      {/* Permission Status */}
+      {permStatus==='unsupported'?(<div style={{background:'var(--coral-g)',border:'1px solid var(--coral)',borderRadius:12,padding:14,textAlign:'center'}}><div style={{fontSize:14,fontWeight:700,color:'var(--coral)'}}>⚠️ {T('المتصفح لا يدعم الإشعارات','Browser does not support notifications',language)}</div></div>)
+      :permStatus==='denied'?(<div style={{background:'var(--coral-g)',border:'1px solid var(--coral)',borderRadius:12,padding:14,textAlign:'center'}}><div style={{fontSize:14,fontWeight:700,color:'var(--coral)'}}>🚫 {T('الإشعارات محظورة — فعلها من إعدادات المتصفح','Notifications blocked — enable from browser settings',language)}</div></div>)
+      :permStatus!=='granted'?(<div style={{textAlign:'center',padding:8}}><button className="btn btn-teal" onClick={handleEnable}>🔔 {T('تفعيل الإشعارات','Enable Notifications',language)}</button></div>)
+      :(<div style={{background:'var(--teal-g)',borderRadius:10,padding:'8px 14px',fontSize:12,color:'var(--teal)',fontWeight:700,textAlign:'center'}}>✅ {T('الإشعارات مفعلة','Notifications enabled',language)}</div>)}
+
+      {/* Settings */}
+      <div style={{opacity:permStatus==='granted'?1:.4,pointerEvents:permStatus==='granted'?'auto':'none'}}>
+
+        {/* Meeting */}
+        <div style={{padding:'12px 0',borderBottom:'1px solid var(--border)'}}>
+          {lbl('👥 '+T('تذكير الاجتماعات','Meeting Reminders',language))}
+          {sub(T('قبل الاجتماع بكم دقيقة؟','How many minutes before?',language))}
+          <div style={{display:'flex',gap:6,marginTop:8}}>{[5,10,15,30,60].map(m=>(<div key={m} onClick={()=>u('meetingReminder',m)} style={{padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${s.meetingReminder===m?'var(--teal)':'var(--border)'}`,background:s.meetingReminder===m?'var(--teal-g)':'transparent',color:s.meetingReminder===m?'var(--teal)':'var(--text2)'}}>{m} {T('د','m',language)}</div>))}</div>
+        </div>
+
+        {/* Prayer */}
+        <div style={{padding:'12px 0',borderBottom:'1px solid var(--border)'}}>
+          {lbl('🕌 '+T('تذكير الصلاة','Prayer Reminders',language))}
+          {sub(T('قبل وقت الصلاة بكم دقيقة؟','Minutes before prayer?',language))}
+          <div style={{display:'flex',gap:6,marginTop:8}}>{[5,10,15,30].map(m=>(<div key={m} onClick={()=>u('prayerReminder',m)} style={{padding:'6px 12px',borderRadius:8,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${s.prayerReminder===m?'var(--teal)':'var(--border)'}`,background:s.prayerReminder===m?'var(--teal-g)':'transparent',color:s.prayerReminder===m?'var(--teal)':'var(--text2)'}}>{m} {T('د','m',language)}</div>))}</div>
+        </div>
+
+        {tog('taskReminder','✅ '+T('تذكير المهام','Task Reminders',language),T('تذكير صباحي بمهام اليوم','Morning reminder for today\'s tasks',language))}
+        {tog('healthReminder','💚 '+T('تذكير السجل الصحي','Health Log Reminder',language),T('تذكير مسائي لتسجيل البيانات الصحية','Evening reminder to log health data',language))}
+        {tog('backupReminder','💾 '+T('تذكير النسخ الاحتياطي','Backup Reminder',language),T('تذكير أسبوعي بعمل نسخة احتياطية','Weekly backup reminder',language))}
+      </div>
+    </div>
+    <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}>
+      <button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button>
+      <button className="btn btn-teal" onClick={save}>💾 {T('حفظ','Save',language)}</button>
+    </div>
+  </div></div>);
+}
+
+function useNotifications(data,lang){
+  const checkRef=useRef(null);
+
+  useEffect(()=>{
+    const check=async()=>{
+      const s=getNotifSettings();
+      if(!s.enabled||Notification.permission!=='granted')return;
+      const now=new Date();
+      const nowMs=now.getTime();
+      const ts=localDS();
+
+      // 1. Meeting reminders
+      (data.meetings||[]).forEach(m=>{
+        if(!m.meetingDate||m.meetingStatus==='cancelled')return;
+        const mTime=new Date(m.meetingDate).getTime();
+        const diff=(mTime-nowMs)/60000;
+        const key=`meet-${m.id}-${s.meetingReminder}`;
+        if(diff>0&&diff<=s.meetingReminder&&!wasNotifSent(key)){
+          sendNotif(
+            '👥 '+m.title,
+            T(`بعد ${Math.round(diff)} دقيقة`,`In ${Math.round(diff)} minutes`,lang)+(m.location?' — 📍 '+m.location:''),
+            '👥','meet-'+m.id
+          );
+          markNotifSent(key);
+        }
+      });
+
+      // 2. Prayer reminders
+      try{
+        const prayerData=JSON.parse(localStorage.getItem('gt-prayers')||'null');
+        if(prayerData){
+          const prayers=['Fajr','Dhuhr','Asr','Maghrib','Isha'];
+          const pNames={Fajr:T('الفجر','Fajr',lang),Dhuhr:T('الظهر','Dhuhr',lang),Asr:T('العصر','Asr',lang),Maghrib:T('المغرب','Maghrib',lang),Isha:T('العشاء','Isha',lang)};
+          prayers.forEach(p=>{
+            const t=prayerData[p];if(!t)return;
+            const[h,m]=t.split(':').map(Number);
+            const pTime=new Date(now);pTime.setHours(h,m,0,0);
+            const diff=(pTime.getTime()-nowMs)/60000;
+            const key=`prayer-${p}-${ts}`;
+            if(diff>0&&diff<=s.prayerReminder&&!wasNotifSent(key)){
+              sendNotif('🕌 '+(pNames[p]||p),T(`حان وقت الصلاة بعد ${Math.round(diff)} دقيقة`,`Prayer time in ${Math.round(diff)} minutes`,lang),'🕌','prayer-'+p);
+              markNotifSent(key);
+            }
+          });
+        }
+      }catch(e){}
+
+      // 3. Task reminder (8 AM)
+      if(s.taskReminder&&now.getHours()===8&&now.getMinutes()<2){
+        const key=`tasks-${ts}`;
+        if(!wasNotifSent(key)){
+          const todayTasks=[...(data.tasks||[]),...(data.quickTasks||[])].filter(t=>t.dueDate?.startsWith(ts)&&t.status!=='complete');
+          if(todayTasks.length>0){
+            sendNotif('✅ '+T('مهام اليوم','Today\'s Tasks',lang),T(`لديك ${todayTasks.length} مهمة اليوم`,`You have ${todayTasks.length} tasks today`,lang),'✅','tasks-today');
+            markNotifSent(key);
+          }
+        }
+      }
+
+      // 4. Health reminder (9 PM)
+      if(s.healthReminder&&now.getHours()===21&&now.getMinutes()<2){
+        const key=`health-${ts}`;
+        if(!wasNotifSent(key)){
+          const hasLog=(data.healthLogs||[]).some(l=>l.date===ts);
+          if(!hasLog){
+            sendNotif('💚 '+T('السجل الصحي','Health Log',lang),T('لم تسجل بياناتك الصحية اليوم','You haven\'t logged health data today',lang),'💚','health-today');
+            markNotifSent(key);
+          }
+        }
+      }
+
+      // 5. Backup reminder (check weekly)
+      if(s.backupReminder){
+        const lastExport=localStorage.getItem('gt-last-export');
+        const daysSince=lastExport?Math.floor((nowMs-new Date(lastExport).getTime())/86400000):999;
+        const key=`backup-week-${Math.floor(nowMs/604800000)}`;
+        if(daysSince>=7&&!wasNotifSent(key)){
+          sendNotif('💾 '+T('نسخة احتياطية','Backup',lang),T('مضى أسبوع على آخر نسخة احتياطية','It\'s been a week since your last backup',lang),'💾','backup');
+          markNotifSent(key);
+        }
+      }
+    };
+
+    checkRef.current=setInterval(check,60000);
+    check(); // run immediately
+    return()=>clearInterval(checkRef.current);
+  },[data,lang]);
+}
+
 function App(){
   const[lang,setLang]=useState('ar');const[view,setView]=useState('today');
   const[data,setData]=useState({goals:[],milestones:[],tasks:[],quickTasks:[],taskLists:[],meetings:[]});
   const[toasts,setToasts]=useState([]);const[modal,setModal]=useState(null);const[confirm,setConfirm]=useState(null);
   const[dayView,setDayView]=useState(null);const[listModal,setListModal]=useState(null);const[uploadModal,setUploadModal]=useState(false);
+  const[notifModal,setNotifModal]=useState(false);
   const[theme,setTheme]=useState(()=>localStorage.getItem('gt-theme')||'dark');
   const[previewMode,setPreviewMode]=useState('desktop');
   const[search,setSearch]=useState('');
@@ -2027,6 +2190,7 @@ function App(){
   useEffect(()=>{(async()=>{await initCats();await load();})();},[load]);
   useEffect(()=>{document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';},[lang]);
   useEffect(()=>{document.documentElement.className=theme==='light'?'light':'';localStorage.setItem('gt-theme',theme);},[theme]);
+  useNotifications(data,lang);
   const toast=useCallback((msg,type='success')=>{const id=Date.now();setToasts(p=>[...p,{id,message:msg,type}]);setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3000);},[]);
   const tsMap={goal:'goals',milestone:'milestones',task:'tasks',quickTask:'quickTasks',meeting:'meetings'};
 
@@ -2094,6 +2258,7 @@ function App(){
             {installPrompt&&<button className="btn btn-coral btn-sm" onClick={handleInstall} style={{fontSize:12,padding:'6px 12px',animation:'pulse 2s infinite'}}>📲 {T('ثبّت التطبيق','Install App',lang)}</button>}
             <button className="btn btn-ghost btn-icon-sm" title={theme==='dark'?T('الوضع الفاتح','Light Mode',lang):T('الوضع الداكن','Dark Mode',lang)} onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'☀️':'🌙'}</button>
             <button className="btn btn-ghost btn-icon-sm" title={previewMode==='desktop'?T('معاينة الجوال','Mobile Preview',lang):T('معاينة سطح المكتب','Desktop View',lang)} onClick={()=>setPreviewMode(p=>p==='desktop'?'mobile':'desktop')} style={{fontSize:16}}>{previewMode==='desktop'?'📱':'💻'}</button>
+            <button className="btn btn-ghost btn-icon-sm" title={T('الإشعارات','Notifications',lang)} onClick={()=>setNotifModal(true)} style={{position:'relative'}}>🔔{getNotifSettings().enabled&&<div style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'var(--teal)',border:'2px solid var(--bg2)'}}/>}</button>
             <button className="btn btn-ghost btn-icon-sm" title={T('استيراد من Excel','Import Excel',lang)} onClick={()=>setUploadModal(true)}>📂</button>
             <button className="btn btn-ghost btn-icon-sm" title={T('تصدير للتقويم','Export to Calendar',lang)} onClick={handleCalExport} style={{fontSize:16}}>📅</button>
             <button className="btn btn-ghost btn-icon-sm" title={T('تصدير JSON','Export JSON',lang)} onClick={handleExport}>📤</button>
@@ -2159,6 +2324,7 @@ function App(){
       {dayView&&<DayMod dateStr={dayView.dateStr} items={dayView.items} language={lang} onClose={()=>setDayView(null)} onAddTask={d=>handleAddFromDay('quickTask',d)} onAddMeeting={d=>handleAddFromDay('meeting',d)} onAddExpense={d=>{setDayView(null);setExpFromCal(d);}} onStatus={async(store,item,ns)=>{await handleStatus(store,item,ns);const ds=dayView.dateStr;const nd=await dAll('tasks'),nq=await dAll('quickTasks'),nm=await dAll('meetings');const ni=[];nd.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'task'});});nq.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'quickTask'});});nm.forEach(x=>{if(x.meetingDate&&x.meetingDate.startsWith(ds))ni.push({...x,_type:'meeting'});});setDayView({dateStr:ds,items:ni});}} onReorder={async(store,items)=>{await handleReorder(store,items);const ds=dayView.dateStr;const nd=await dAll('tasks'),nq=await dAll('quickTasks'),nm=await dAll('meetings');const ni=[];nd.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'task'});});nq.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'quickTask'});});nm.forEach(x=>{if(x.meetingDate&&x.meetingDate.startsWith(ds))ni.push({...x,_type:'meeting'});});setDayView({dateStr:ds,items:ni});}}/>}
       {expFromCal&&<ExpenseModal expense={{_isNew:true,date:expFromCal}} categories={data.categories||[]} budgets={data.budgets||[]} language={lang} onSave={async e=>{await handleSaveExpense(e);setExpFromCal(null);}} onClose={()=>setExpFromCal(null)}/>}
       {uploadModal&&<UploadModal language={lang} onImport={handleXlsxImport} onClose={()=>setUploadModal(false)}/>}
+      {notifModal&&<NotifSettingsModal language={lang} onClose={()=>setNotifModal(false)}/>}
     </div>);
 }
 ReactDOM.render(<App/>,document.getElementById('root'));
