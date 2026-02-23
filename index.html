@@ -125,6 +125,8 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:50;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease}
 @media(min-width:640px){.overlay{align-items:center}}
+.hidden{display:none!important}
+@media(min-width:640px){.sm\:block{display:block!important}.sm\:flex{display:flex!important}}
 .modal{background:var(--bg2);border:1px solid var(--border);width:100%;max-height:92dvh;overflow-y:auto;border-radius:24px 24px 0 0;animation:slideUp .35s cubic-bezier(.4,0,.2,1)}
 @media(min-width:640px){.modal{max-width:520px;border-radius:24px;max-height:85dvh}}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
@@ -844,7 +846,7 @@ function UploadModal({ language, onImport, onClose }) {
 // ========== ITEM MODAL ==========
 function ItemModal({type,editItem,goalId,milestoneId,language,onSave,onClose,allTasks}){
   const isE=editItem&&editItem.id;
-  const defs={goal:{title:'',description:'',icon:'🎯',color:'#FF6B6B',startDate:localDS(),endDate:''},milestone:{title:'',description:'',icon:'📍',dueDate:''},task:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',repeat:'never',repeatStartDate:'',repeatEndDate:'',notes:'',blockedBy:''},quickTask:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',notes:''},meeting:{title:'',description:'',icon:'👥',meetingDate:'',attendees:'',location:'',notes:'',minutes:'',decisions:'',meetingStatus:'scheduled',originalMeetingDate:''}};
+  const defs={goal:{title:'',description:'',icon:'🎯',color:'#FF6B6B',startDate:localDS(),endDate:''},milestone:{title:'',description:'',icon:'📍',dueDate:''},task:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',repeat:'never',repeatStartDate:'',repeatEndDate:'',autoDefer:'none',notes:'',blockedBy:''},quickTask:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',notes:''},meeting:{title:'',description:'',icon:'👥',meetingDate:'',attendees:'',location:'',notes:'',minutes:'',decisions:'',meetingStatus:'scheduled',originalMeetingDate:''}};
   const[f,setF]=useState({...defs[type],...(editItem||{})});const u=(k,v)=>setF(p=>({...p,[k]:v}));
   const save=()=>{if(!f.title.trim())return;const now=new Date().toISOString();let item=isE?{...f,updatedAt:now}:{...f,id:uid(),createdAt:now};if(type==='task'&&!isE)item.milestoneId=milestoneId;if(type==='milestone'&&!isE)item.goalId=goalId;onSave(type,item);};
   const ic=type==='goal'?ICONS.goals:type==='milestone'?ICONS.milestones:type==='meeting'?ICONS.meetings:ICONS.tasks;
@@ -860,7 +862,8 @@ function ItemModal({type,editItem,goalId,milestoneId,language,onSave,onClose,all
         {type==='goal'&&<><div><span className="label">{T('اللون','Color',language)}</span><ColPick sel={f.color} onSel={v=>u('color',v)}/></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div><span className="label">{T('البدء','Start',language)}</span><input type="date" className="field" value={f.startDate} onChange={e=>u('startDate',e.target.value)}/></div><div><span className="label">{T('الانتهاء','End',language)}</span><input type="date" className="field" value={f.endDate} onChange={e=>u('endDate',e.target.value)}/></div></div></>}
         {type==='milestone'&&<div><span className="label">{T('التاريخ','Due',language)}</span><input type="date" className="field" value={f.dueDate||''} onChange={e=>u('dueDate',e.target.value)}/></div>}
         {(type==='task'||type==='quickTask')&&<><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div><span className="label">{T('التاريخ','Due',language)}</span><input type="date" className="field" value={f.dueDate||''} onChange={e=>u('dueDate',e.target.value)}/></div><div><span className="label">{T('الأولوية','Priority',language)}</span><select className="field" value={f.priority} onChange={e=>u('priority',e.target.value)}><option value="low">🟢 {T('منخفضة','Low',language)}</option><option value="medium">🟡 {T('متوسطة','Medium',language)}</option><option value="high">🔴 {T('عالية','High',language)}</option></select></div></div>{type==='task'&&<><div><span className="label">{T('التكرار','Repeat',language)}</span><select className="field" value={f.repeat||'never'} onChange={e=>u('repeat',e.target.value)}><option value="never">{T('بدون','Never',language)}</option><option value="daily">🔄 {T('يومياً','Daily',language)}</option><option value="weekly">🔄 {T('أسبوعياً','Weekly',language)}</option><option value="monthly">🔄 {T('شهرياً','Monthly',language)}</option></select>{f.repeat&&f.repeat!=='never'&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:12}}><div><span className="label" style={{fontSize:11}}>{T('من','From',language)}</span><input type="date" className="field" value={f.repeatStartDate||''} onChange={e=>u('repeatStartDate',e.target.value)}/></div><div><span className="label" style={{fontSize:11}}>{T('إلى','To',language)}</span><input type="date" className="field" value={f.repeatEndDate||''} onChange={e=>u('repeatEndDate',e.target.value)}/></div></div>}</div>
-        {depOptions.length>0&&<div><span className="label">🔗 {T('محجوب بواسطة','Blocked by',language)}</span><select className="field" value={f.blockedBy||''} onChange={e=>u('blockedBy',e.target.value)}><option value="">{T('بدون','None',language)}</option>{depOptions.map(t=>(<option key={t.id} value={t.id}>{t.icon} {t.title}</option>))}</select></div>}</>}</>}
+        {depOptions.length>0&&<div><span className="label">🔗 {T('محجوب بواسطة','Blocked by',language)}</span><select className="field" value={f.blockedBy||''} onChange={e=>u('blockedBy',e.target.value)}><option value="">{T('بدون','None',language)}</option>{depOptions.map(t=>(<option key={t.id} value={t.id}>{t.icon} {t.title}</option>))}</select></div>}
+        <div style={{background:'var(--gold-g)',border:'1px solid var(--gold)',borderRadius:12,padding:12,marginTop:4}}><span className="label" style={{color:'var(--gold)'}}>⏩ {T('الترحيل التلقائي','Auto-Defer',language)}</span><div style={{fontSize:10,color:'var(--text2)',marginBottom:6}}>{T('عند عدم الإنجاز في الموعد، يتم ترحيل المهمة تلقائياً','If not completed by due date, task auto-defers',language)}</div><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{[{v:'none',l:T('بدون','None',language),i:'✕'},{v:'daily',l:T('لليوم التالي','Next Day',language),i:'📅'},{v:'weekly',l:T('للأسبوع التالي','Next Week',language),i:'📆'},{v:'monthly',l:T('للشهر التالي','Next Month',language),i:'🗓️'}].map(o=>(<div key={o.v} onClick={()=>u('autoDefer',o.v)} style={{padding:'6px 10px',borderRadius:8,fontSize:11,fontWeight:700,cursor:'pointer',border:`2px solid ${(f.autoDefer||'none')===o.v?'var(--gold)':'var(--border)'}`,background:(f.autoDefer||'none')===o.v?'var(--gold)':'transparent',color:(f.autoDefer||'none')===o.v?'white':'var(--text2)'}}>{o.i} {o.l}</div>))}</div></div></>}</>}
         {type==='meeting'&&<><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div><span className="label">📅 {T('التاريخ','Date',language)}</span><input type="date" className="field" value={(f.meetingDate||'').slice(0,10)} onChange={e=>{const time=(f.meetingDate||'').includes('T')?(f.meetingDate.split('T')[1]||'09:00'):'09:00';u('meetingDate',e.target.value+'T'+time);}}/></div><div><span className="label">🕐 {T('الوقت','Time',language)}</span><input type="time" className="field" value={(f.meetingDate||'').includes('T')?(f.meetingDate.split('T')[1]||'09:00'):''} onChange={e=>{const date=(f.meetingDate||'').slice(0,10)||localDS();u('meetingDate',date+'T'+e.target.value);}}/></div></div>
         <div><span className="label">📌 {T('حالة الاجتماع','Meeting Status',language)}</span><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{[{v:'scheduled',l:T('مجدول','Scheduled',language),c:'var(--teal)',i:'📅'},{v:'done',l:T('تم','Done',language),c:'var(--lime)',i:'✅'},{v:'cancelled',l:T('ملغي','Cancelled',language),c:'var(--coral)',i:'❌'},{v:'deferred',l:T('مؤجل','Deferred',language),c:'var(--gold)',i:'⏳'}].map(s=>(<div key={s.v} onClick={()=>{u('meetingStatus',s.v);if(s.v==='deferred'&&!f.originalMeetingDate&&f.meetingDate)u('originalMeetingDate',f.meetingDate);}} style={{flex:1,minWidth:60,padding:'8px 6px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'center',border:`2px solid ${(f.meetingStatus||'scheduled')===s.v?s.c:'var(--border)'}`,background:(f.meetingStatus||'scheduled')===s.v?s.c+'18':'transparent',color:(f.meetingStatus||'scheduled')===s.v?s.c:'var(--text2)'}}>{s.i} {s.l}</div>))}</div></div>
         {(f.meetingStatus==='deferred')&&<div style={{background:'var(--gold-g)',border:'1px solid var(--gold)',borderRadius:12,padding:12}}>{f.originalMeetingDate&&<div style={{fontSize:11,color:'var(--gold)',fontWeight:700,marginBottom:8}}>📋 {T('الموعد الأصلي:','Original date:',language)} {new Date(f.originalMeetingDate).toLocaleString(language==='ar'?'ar-SA':'en-US',{dateStyle:'medium',timeStyle:'short'})}</div>}<div style={{fontSize:12,fontWeight:700,color:'var(--text)',marginBottom:6}}>📅 {T('الموعد الجديد','New Date & Time',language)}</div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><input type="date" className="field" value={(f.meetingDate||'').slice(0,10)} onChange={e=>{const time=(f.meetingDate||'').includes('T')?(f.meetingDate.split('T')[1]||'09:00'):'09:00';u('meetingDate',e.target.value+'T'+time);}}/><input type="time" className="field" value={(f.meetingDate||'').includes('T')?(f.meetingDate.split('T')[1]||'09:00'):''} onChange={e=>{const date=(f.meetingDate||'').slice(0,10)||localDS();u('meetingDate',date+'T'+e.target.value);}}/></div></div>}
@@ -940,7 +943,7 @@ return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{
 <div style={{background:'var(--bg2)',borderRadius:14,padding:12,marginBottom:8,border:'1px solid var(--border)'}}><div style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}} onClick={()=>setEM(eM===ms.id?null:ms.id)}>{dragHandle}<span style={{fontSize:22}}>{ms.icon}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14}}>{ms.title}</div>{ms.dueDate&&<div style={{fontSize:11,color:'var(--text2)'}}>{new Date(ms.dueDate).toLocaleDateString(language==='ar'?'ar-SA':'en-US')}</div>}</div><Prog progress={mP(ms.id)} size={38} sw={3} color={g.color}/><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={e=>{e.stopPropagation();onEdit('milestone',ms);}}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={e=>{e.stopPropagation();onDelete('milestones',ms.id,ms.title);}}>🗑️</button></div></div>
 {eM===ms.id&&(<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}><span style={{fontSize:12,color:'var(--text2)',fontWeight:700}}>✅ {T('المهام','Tasks',language)}</span><div style={{display:'flex',gap:6,alignItems:'center'}}><SortBtn sort={tkSort} onToggle={()=>setTkSort(s=>nextSort(s))} language={language}/><button className="btn btn-teal btn-xs" onClick={()=>onAdd('task',g.id,ms.id)}>⚡ {T('مهمة','Task',language)}</button></div></div>
 <DragList items={getTasks(ms.id)} onReorder={arr=>onReorder('tasks',arr)} renderItem={(tk,tidx,tDragHandle)=>{const blocked=isBlocked(tk);return(
-<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--border)',opacity:blocked?.5:1}}>{tDragHandle}<div onClick={()=>{if(!blocked)onStatus('tasks',tk,ns[tk.status]);}} style={{width:26,height:26,borderRadius:8,border:`2px solid ${blocked?'var(--coral)':sc[tk.status]}`,background:tk.status==='complete'?sc.complete:blocked?'var(--coral-g)':'transparent',cursor:blocked?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{tk.status==='complete'?'✓':blocked?'🔒':''}</div><span style={{fontSize:16}}>{tk.icon}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span><span className="badge" style={{background:`${pc[tk.priority]}22`,color:pc[tk.priority]}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}{blocked&&<span className="dep-badge">🔗 {depName(tk).slice(0,20)}</span>}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>80?tk.notes.slice(0,80)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('task',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('tasks',tk.id,tk.title)}>🗑️</button></div></div>
+<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--border)',opacity:blocked?.5:1}}>{tDragHandle}<div onClick={()=>{if(!blocked)onStatus('tasks',tk,ns[tk.status]);}} style={{width:26,height:26,borderRadius:8,border:`2px solid ${blocked?'var(--coral)':sc[tk.status]}`,background:tk.status==='complete'?sc.complete:blocked?'var(--coral-g)':'transparent',cursor:blocked?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{tk.status==='complete'?'✓':blocked?'🔒':''}</div><span style={{fontSize:16}}>{tk.icon}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span><span className="badge" style={{background:`${pc[tk.priority]}22`,color:pc[tk.priority]}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}{tk.autoDefer&&tk.autoDefer!=='none'&&<span className="badge" style={{background:'var(--gold-g)',color:'var(--gold)'}}>⏩</span>}{blocked&&<span className="dep-badge">🔗 {depName(tk).slice(0,20)}</span>}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>80?tk.notes.slice(0,80)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('task',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('tasks',tk.id,tk.title)}>🗑️</button></div></div>
 );}}/></div>)}</div>
 )}/></div>)}</div>))}</div>);}
 
@@ -1362,6 +1365,36 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
               <div style={{display:'flex',gap:4}}>
                 <button className="btn btn-ghost btn-xs" onClick={()=>setBudModal(b)}>✏️</button>
                 <button className="btn btn-ghost btn-xs" style={{color:'var(--coral)'}} onClick={()=>{onDeleteBudget(b);setSelBudget(null);}}>🗑️</button>
+                <button className="btn btn-gold btn-xs" onClick={()=>{
+                  const bExps2=allExpRaw.filter(e=>e.budgetId===b.id).sort((a,c)=>new Date(a.date)-new Date(c.date));
+                  const r=rates;
+                  const exRate=(fromCur,toCur)=>{if(fromCur===toCur)return 1;const fr=r[fromCur]||1;const tr=r[toCur]||1;return tr/fr;};
+                  const hdr=[[T('تقرير ميزانية','Budget Report',language)+': '+b.title],[T('إجمالي الميزانية','Total Budget',language)+': '+b.totalAmount+' '+b.currency],[T('تاريخ التقرير','Report Date',language)+': '+new Date().toLocaleDateString(language==='ar'?'ar-SA':'en-US')],[]];
+                  const cols=[T('التاريخ','Date',language),T('التصنيف','Category',language),T('الوصف','Description',language),T('المبلغ الأصلي','Original Amount',language),T('العملة','Currency',language),T('سعر التحويل','Exchange Rate',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('طريقة الدفع','Payment',language),T('ملاحظات','Notes',language)];
+                  const rows=[cols];
+                  let totalConverted=0;
+                  bExps2.forEach(e=>{const cat=getCat(e.category);const rate=exRate(e.currency,b.currency);const converted=e.amount*rate;totalConverted+=converted;
+                    rows.push([e.date,language==='ar'?cat.name:cat.nameEn,e.title,e.amount,e.currency,e.currency!==b.currency?Math.round(rate*10000)/10000:'—',Math.round(converted*100)/100,e.paymentMethod||'',e.notes||'']);
+                  });
+                  rows.push([]);
+                  rows.push(['','',T('الإجمالي المصروف','Total Spent',language),'','','',Math.round(totalConverted*100)/100,'','']);
+                  rows.push(['','',T('المتبقي','Remaining',language),'','','',Math.round((b.totalAmount-totalConverted)*100)/100,'','']);
+                  rows.push(['','',T('النسبة المصروفة','% Spent',language),'','','',b.totalAmount?Math.round(totalConverted/b.totalAmount*10000)/100+'%':'0%','','']);
+                  rows.push([]);
+                  rows.push([T('ملاحظة: سعر التحويل يعكس السعر وقت تصدير التقرير','Note: Exchange rates reflect rates at time of export',language)]);
+                  const wb2=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet([...hdr,...rows]);
+                  ws['!cols']=[{wch:12},{wch:16},{wch:25},{wch:14},{wch:8},{wch:14},{wch:16},{wch:12},{wch:20}];
+                  XLSX.utils.book_append_sheet(wb2,ws,b.title.slice(0,31));
+                  // Category summary sheet
+                  const catSm=[[T('تقرير حسب التصنيف','Category Summary',language)],[]];
+                  catSm.push([T('التصنيف','Category',language),T('عدد العمليات','Transactions',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('النسبة','%',language)]);
+                  const byCat2={};bExps2.forEach(e=>{const cid=e.category;if(!byCat2[cid])byCat2[cid]={amt:0,cnt:0};byCat2[cid].amt+=e.amount*exRate(e.currency,b.currency);byCat2[cid].cnt++;});
+                  Object.entries(byCat2).sort((a,c)=>c[1].amt-a[1].amt).forEach(([cid,info])=>{const cat=getCat(cid);catSm.push([language==='ar'?cat.name:cat.nameEn,info.cnt,Math.round(info.amt*100)/100,totalConverted?Math.round(info.amt/totalConverted*100)+'%':'0%']);});
+                  const ws2=XLSX.utils.aoa_to_sheet(catSm);ws2['!cols']=[{wch:20},{wch:14},{wch:18},{wch:10}];
+                  XLSX.utils.book_append_sheet(wb2,ws2,T('ملخص','Summary',language));
+                  XLSX.writeFile(wb2,`budget-${b.title}-${localDS()}.xlsx`);
+                  toast(T('تم تصدير الميزانية 📤','Budget exported 📤',language));
+                }}>📤 Excel</button>
                 {!b.closed&&<button className="btn btn-coral btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency})}>+ {T('مصروف','Expense',language)}</button>}
               </div>
             </div>
@@ -2250,6 +2283,35 @@ function App(){
   useEffect(()=>{document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';},[lang]);
   useEffect(()=>{document.documentElement.className=theme==='light'?'light':'';localStorage.setItem('gt-theme',theme);},[theme]);
   useNotifications(data,lang);
+
+  // Auto-defer overdue tasks (runs once after initial load)
+  const deferRanRef=useRef(false);
+  useEffect(()=>{
+    if(deferRanRef.current||!data.tasks?.length)return;
+    deferRanRef.current=true;
+    const autoDefer=async()=>{
+      const today=localDS();
+      let deferred=0;
+      for(const tk of data.tasks){
+        if(!tk.autoDefer||tk.autoDefer==='none'||tk.status==='complete'||!tk.dueDate)continue;
+        if(tk.dueDate>=today)continue;
+        const dd=new Date(tk.dueDate+'T12:00');let nd=new Date(dd);
+        if(tk.autoDefer==='daily')nd.setDate(nd.getDate()+1);
+        else if(tk.autoDefer==='weekly')nd.setDate(nd.getDate()+7);
+        else nd.setMonth(nd.getMonth()+1);
+        while(nd.toISOString().slice(0,10)<today){
+          if(tk.autoDefer==='daily')nd.setDate(nd.getDate()+1);
+          else if(tk.autoDefer==='weekly')nd.setDate(nd.getDate()+7);
+          else nd.setMonth(nd.getMonth()+1);
+        }
+        const updated={...tk,dueDate:nd.toISOString().slice(0,10),updatedAt:new Date().toISOString()};
+        delete updated._s;delete updated._ns;delete updated._type;
+        await dPut('tasks',updated);deferred++;
+      }
+      if(deferred>0){await load();toast(T(`⏩ تم ترحيل ${deferred} مهمة تلقائياً`,`⏩ ${deferred} task(s) auto-deferred`,lang),'info');}
+    };
+    autoDefer();
+  },[data.tasks]);
   const toast=useCallback((msg,type='success')=>{const id=Date.now();setToasts(p=>[...p,{id,message:msg,type}]);setTimeout(()=>setToasts(p=>p.filter(t=>t.id!==id)),3000);},[]);
   const tsMap={goal:'goals',milestone:'milestones',task:'tasks',quickTask:'quickTasks',meeting:'meetings'};
 
@@ -2313,16 +2375,16 @@ function App(){
         <div className="desktop-layout" style={{maxWidth:860,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}><img src={MUTQIN_LOGO} alt="متقن" style={{width:36,height:36,borderRadius:8}}/><h1 className="hidden sm:block" style={{fontSize:18,fontWeight:900,background:'linear-gradient(135deg,var(--coral),var(--gold))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>{T('متقن','Mutqin',lang)}</h1><span className="hidden sm:block" style={{fontSize:9,color:'var(--text2)',background:'var(--bg3)',padding:'2px 6px',borderRadius:6,fontWeight:700}}>v{APP_VERSION}</span><LiveWidget language={lang}/></div>
           <nav className="dnav" style={{gap:4}}>{navs.map(n=>(<div key={n.id} className={`dnav-item ${view===n.id?'active':''}`} onClick={()=>setView(n.id)}><span>{n.icon}</span><span>{n.label}</span></div>))}</nav>
-          <div style={{display:'flex',alignItems:'center',gap:4}}>
-            {installPrompt&&<button className="btn btn-coral btn-sm" onClick={handleInstall} style={{fontSize:12,padding:'6px 12px',animation:'pulse 2s infinite'}}>📲 {T('ثبّت التطبيق','Install App',lang)}</button>}
-            <button className="btn btn-ghost btn-icon-sm" title={theme==='dark'?T('الوضع الفاتح','Light Mode',lang):T('الوضع الداكن','Dark Mode',lang)} onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'☀️':'🌙'}</button>
-            <button className="btn btn-ghost btn-icon-sm" title={previewMode==='desktop'?T('معاينة الجوال','Mobile Preview',lang):T('معاينة سطح المكتب','Desktop View',lang)} onClick={()=>setPreviewMode(p=>p==='desktop'?'mobile':'desktop')} style={{fontSize:16}}>{previewMode==='desktop'?'📱':'💻'}</button>
+          <div style={{display:'flex',alignItems:'center',gap:2,flexShrink:0}}>
+            {installPrompt&&<button className="btn btn-coral btn-sm hidden sm:flex" onClick={handleInstall} style={{fontSize:12,padding:'6px 12px',animation:'pulse 2s infinite'}}>📲 {T('ثبّت التطبيق','Install App',lang)}</button>}
             <button className="btn btn-ghost btn-icon-sm" title={T('الإشعارات','Notifications',lang)} onClick={()=>setNotifModal(true)} style={{position:'relative'}}>🔔{getNotifSettings().enabled&&<div style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'var(--teal)',border:'2px solid var(--bg2)'}}/>}</button>
-            <button className="btn btn-ghost btn-icon-sm" title={T('استيراد من Excel','Import Excel',lang)} onClick={()=>setUploadModal(true)}>📂</button>
-            <button className="btn btn-ghost btn-icon-sm" title={T('تصدير للتقويم','Export to Calendar',lang)} onClick={handleCalExport} style={{fontSize:16}}>📅</button>
-            <button className="btn btn-ghost btn-icon-sm" title={T('تصدير JSON','Export JSON',lang)} onClick={handleExport}>📤</button>
-            <button className="btn btn-ghost btn-icon-sm" title={T('استيراد JSON','Import JSON',lang)} onClick={handleImport}>📥</button>
-            <button className="btn btn-ghost btn-sm" onClick={()=>setLang(lang==='ar'?'en':'ar')} style={{fontWeight:800,fontSize:13}}>{lang==='ar'?'EN':'عربي'}</button>
+            <button className="btn btn-ghost btn-icon-sm" title={theme==='dark'?T('الوضع الفاتح','Light Mode',lang):T('الوضع الداكن','Dark Mode',lang)} onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'☀️':'🌙'}</button>
+            <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={previewMode==='desktop'?T('معاينة الجوال','Mobile Preview',lang):T('معاينة سطح المكتب','Desktop View',lang)} onClick={()=>setPreviewMode(p=>p==='desktop'?'mobile':'desktop')} style={{fontSize:16}}>{previewMode==='desktop'?'📱':'💻'}</button>
+            <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={T('استيراد من Excel','Import Excel',lang)} onClick={()=>setUploadModal(true)}>📂</button>
+            <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={T('تصدير للتقويم','Export to Calendar',lang)} onClick={handleCalExport} style={{fontSize:16}}>📅</button>
+            <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={T('تصدير JSON','Export JSON',lang)} onClick={handleExport}>📤</button>
+            <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={T('استيراد JSON','Import JSON',lang)} onClick={handleImport}>📥</button>
+            <button className="btn btn-ghost btn-sm" onClick={()=>setLang(lang==='ar'?'en':'ar')} style={{fontWeight:800,fontSize:12,padding:'4px 8px'}}>{lang==='ar'?'EN':'ع'}</button>
           </div>
         </div>
       </header>
