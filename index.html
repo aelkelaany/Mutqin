@@ -126,7 +126,7 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:50;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease}
 @media(min-width:640px){.overlay{align-items:center}}
 .hidden{display:none!important}
-@media(min-width:640px){.sm\:block{display:block!important}.sm\:flex{display:flex!important}}
+@media(min-width:640px){.sm\:block{display:block!important}.sm\:flex{display:flex!important}.sm\:hidden{display:none!important}}
 .modal{background:var(--bg2);border:1px solid var(--border);width:100%;max-height:92dvh;overflow-y:auto;border-radius:24px 24px 0 0;animation:slideUp .35s cubic-bezier(.4,0,.2,1)}
 @media(min-width:640px){.modal{max-width:520px;border-radius:24px;max-height:85dvh}}
 @keyframes slideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
@@ -2296,6 +2296,7 @@ function App(){
   const[toasts,setToasts]=useState([]);const[modal,setModal]=useState(null);const[confirm,setConfirm]=useState(null);
   const[dayView,setDayView]=useState(null);const[listModal,setListModal]=useState(null);const[uploadModal,setUploadModal]=useState(false);
   const[notifModal,setNotifModal]=useState(false);
+  const[moreMenu,setMoreMenu]=useState(false);
   const[theme,setTheme]=useState(()=>localStorage.getItem('gt-theme')||'dark');
   const[previewMode,setPreviewMode]=useState('desktop');
   const[search,setSearch]=useState('');
@@ -2436,20 +2437,34 @@ function App(){
   return(
     <div style={{minHeight:'100dvh',display:'flex',flexDirection:'column',position:'relative',zIndex:1}}>
       <header style={{background:'var(--bg2)',borderBottom:'1px solid var(--border)',padding:'10px 14px',position:'sticky',top:0,zIndex:40,backdropFilter:'blur(12px)'}}>
-        <div className="desktop-layout" style={{maxWidth:860,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between'}}>
+        <div className="desktop-layout" style={{maxWidth:860,margin:'0 auto',display:'flex',alignItems:'center',justifyContent:'space-between',position:'relative'}}>
           <div style={{display:'flex',alignItems:'center',gap:8}}><img src={MUTQIN_LOGO} alt="متقن" style={{width:36,height:36,borderRadius:8}}/><h1 className="hidden sm:block" style={{fontSize:18,fontWeight:900,background:'linear-gradient(135deg,var(--coral),var(--gold))',WebkitBackgroundClip:'text',WebkitTextFillColor:'transparent'}}>{T('متقن','Mutqin',lang)}</h1><span className="hidden sm:block" style={{fontSize:9,color:'var(--text2)',background:'var(--bg3)',padding:'2px 6px',borderRadius:6,fontWeight:700}}>v{APP_VERSION}</span><LiveWidget language={lang}/></div>
           <nav className="dnav" style={{gap:4}}>{navs.map(n=>(<div key={n.id} className={`dnav-item ${view===n.id?'active':''}`} onClick={()=>setView(n.id)}><span>{n.icon}</span><span>{n.label}</span></div>))}</nav>
           <div style={{display:'flex',alignItems:'center',gap:2,flexShrink:0}}>
             {installPrompt&&<button className="btn btn-coral btn-sm hidden sm:flex" onClick={handleInstall} style={{fontSize:12,padding:'6px 12px',animation:'pulse 2s infinite'}}>📲 {T('ثبّت التطبيق','Install App',lang)}</button>}
             <button className="btn btn-ghost btn-icon-sm" title={T('الإشعارات','Notifications',lang)} onClick={()=>setNotifModal(true)} style={{position:'relative'}}>🔔{getNotifSettings().enabled&&<div style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'var(--teal)',border:'2px solid var(--bg2)'}}/>}</button>
-            <button className="btn btn-ghost btn-icon-sm" title={theme==='dark'?T('الوضع الفاتح','Light Mode',lang):T('الوضع الداكن','Dark Mode',lang)} onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'☀️':'🌙'}</button>
+            <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={theme==='dark'?T('الوضع الفاتح','Light Mode',lang):T('الوضع الداكن','Dark Mode',lang)} onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'☀️':'🌙'}</button>
             <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={previewMode==='desktop'?T('معاينة الجوال','Mobile Preview',lang):T('معاينة سطح المكتب','Desktop View',lang)} onClick={()=>setPreviewMode(p=>p==='desktop'?'mobile':'desktop')} style={{fontSize:16}}>{previewMode==='desktop'?'📱':'💻'}</button>
             <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={T('استيراد من Excel','Import Excel',lang)} onClick={()=>setUploadModal(true)}>📂</button>
             <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={T('تصدير للتقويم','Export to Calendar',lang)} onClick={handleCalExport} style={{fontSize:16}}>📅</button>
             <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={T('تصدير JSON','Export JSON',lang)} onClick={handleExport}>📤</button>
             <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={T('استيراد JSON','Import JSON',lang)} onClick={handleImport}>📥</button>
-            <button className="btn btn-ghost btn-sm" onClick={()=>setLang(lang==='ar'?'en':'ar')} style={{fontWeight:800,fontSize:12,padding:'4px 8px'}}>{lang==='ar'?'EN':'ع'}</button>
+            <button className="btn btn-ghost btn-sm hidden sm:flex" onClick={()=>setLang(lang==='ar'?'en':'ar')} style={{fontWeight:800,fontSize:12,padding:'4px 8px'}}>{lang==='ar'?'EN':'ع'}</button>
+            {/* Mobile More Menu Button */}
+            <button className="btn btn-ghost btn-icon-sm sm:hidden" onClick={()=>setMoreMenu(!moreMenu)} style={{fontSize:18,position:'relative'}}>⋮</button>
           </div>
+          {/* Mobile Dropdown Menu */}
+          {moreMenu&&<div onClick={()=>setMoreMenu(false)} style={{position:'fixed',inset:0,zIndex:99}}/>}
+          {moreMenu&&<div style={{position:'absolute',top:'100%',left:lang==='ar'?12:'auto',right:lang==='ar'?'auto':12,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:16,padding:8,zIndex:100,boxShadow:'0 12px 40px rgba(0,0,0,.4)',minWidth:220,display:'flex',flexDirection:'column',gap:2}} className="sm:hidden">
+            <div onClick={()=>{setTheme(t=>t==='dark'?'light':'dark');setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>{theme==='dark'?'☀️':'🌙'}</span>{theme==='dark'?T('الوضع الفاتح','Light Mode',lang):T('الوضع الداكن','Dark Mode',lang)}</div>
+            <div onClick={()=>{setLang(lang==='ar'?'en':'ar');setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>🌐</span>{lang==='ar'?'English':'عربي'}</div>
+            <div style={{height:1,background:'var(--border)',margin:'4px 0'}}/>
+            <div onClick={()=>{handleExport();setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>📤</span>{T('تصدير JSON','Export JSON',lang)}</div>
+            <div onClick={()=>{handleImport();setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>📥</span>{T('استيراد JSON','Import JSON',lang)}</div>
+            <div onClick={()=>{setUploadModal(true);setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>📂</span>{T('استيراد Excel','Import Excel',lang)}</div>
+            <div onClick={()=>{handleCalExport();setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>📅</span>{T('تصدير للتقويم','Export to Calendar',lang)}</div>
+            {installPrompt&&<><div style={{height:1,background:'var(--border)',margin:'4px 0'}}/><div onClick={()=>{handleInstall();setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:700,color:'var(--coral)'}}><span style={{fontSize:18}}>📲</span>{T('ثبّت التطبيق','Install App',lang)}</div></>}
+          </div>}
         </div>
       </header>
       {previewMode==='mobile'?(
