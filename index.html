@@ -1099,6 +1099,23 @@ function convertAmount(amount,fromCur,toCur,rates){
   const inUSD=amount/fromRate;
   return inUSD*toRate;
 }
+// Use rate stored at expense save time (accurate for Zakat/historical)
+function convertWithSavedRate(expense,toCur,fallbackRates){
+  if(expense.currency===toCur||!expense.amount)return expense.amount;
+  // If expense has a saved rate for target currency, use it
+  if(expense.savedRates&&expense.savedRates[toCur]){
+    return expense.amount*expense.savedRates[toCur];
+  }
+  // Fallback to current rates
+  return convertAmount(expense.amount,expense.currency,toCur,fallbackRates);
+}
+function getExpenseRate(expense,toCur,fallbackRates){
+  if(expense.currency===toCur)return 1;
+  if(expense.savedRates&&expense.savedRates[toCur])return expense.savedRates[toCur];
+  const r=fallbackRates||getStoredRates().rates;
+  const fr=r[expense.currency]||1;const tr=r[toCur]||1;
+  return tr/fr;
+}
 function fmtMoney(n){if(n==null||isNaN(n))return'0';if(n<0)return'-'+fmtMoney(-n);if(n>=1000000)return(n/1000000).toFixed(1)+'M';if(n>=10000)return(n/1000).toFixed(1)+'K';if(n>=1000)return Math.round(n).toLocaleString();if(n%1)return n.toFixed(2);return n.toString();}
 
 async function initCats(){const existing=await dAll('categories');if(!existing.length){for(const c of DEF_CATS)await dPut('categories',{...c,createdAt:new Date().toISOString()});}}
@@ -1107,7 +1124,13 @@ function ExpenseModal({expense,categories,budgets,language,onSave,onClose}){
   const isE=expense&&expense.id&&!expense._isNew;
   const[form,setForm]=useState(()=>isE?{...expense}:{title:'',amount:'',currency:expense?.currency||'SAR',category:categories[0]?.id||'',date:expense?.date||localDS(),notes:'',budgetId:expense?.budgetId||'',paymentMethod:'cash'});
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
-  const save=()=>{if(!form.title.trim()||!form.amount){return;}onSave({...form,id:form.id||uid(),amount:parseFloat(form.amount),createdAt:form.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});};
+  const save=()=>{if(!form.title.trim()||!form.amount){return;}
+    // Store exchange rate at time of saving for accurate historical tracking
+    const rates=getStoredRates().rates;
+    const savedRates={};
+    CURRENCIES.forEach(c=>{if(c.code!==form.currency){const fr=rates[form.currency]||1;const tr=rates[c.code]||1;savedRates[c.code]=Math.round((tr/fr)*1000000)/1000000;}});
+    onSave({...form,id:form.id||uid(),amount:parseFloat(form.amount),savedRates:form.savedRates||savedRates,savedRateDate:form.savedRateDate||new Date().toISOString(),createdAt:form.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
+  };
   const pay=[{v:'cash',l:T('نقد','Cash',language),i:'💵'},{v:'card',l:T('بطاقة','Card',language),i:'💳'},{v:'transfer',l:T('تحويل','Transfer',language),i:'🏦'}];
   return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:420,maxHeight:'90dvh',overflow:'auto'}}>
     <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>{isE?T('تعديل مصروف','Edit Expense',language):T('مصروف جديد','New Expense',language)}</h3></div>
@@ -1245,6 +1268,9 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
 
   const toBase=useCallback((amount,fromCur)=>convertAmount(amount,fromCur,baseCur,rates),[baseCur,rates]);
   const toBudgetCur=useCallback((amount,fromCur,budCur)=>convertAmount(amount,fromCur,budCur,rates),[rates]);
+  // Use saved rates for budget calculations (accurate historical rates)
+  const expToBudget=useCallback((e,budCur)=>convertWithSavedRate(e,budCur,rates),[rates]);
+  const expRate=useCallback((e,budCur)=>getExpenseRate(e,budCur,rates),[rates]);
 
   const cats=data.categories||[];
   const allExpRaw=data.expenses||[];
@@ -1268,7 +1294,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
 
   const getCatName=(id)=>{const c=cats.find(c=>c.id===id);return c?(language==='ar'?c.name:c.nameEn):'❓';};
   const getCat=(id)=>cats.find(c=>c.id===id)||{icon:'❓',color:'#666',name:'أخرى',nameEn:'Other'};
-  const getBudgetSpent=useCallback((bid)=>{const b=budgets.find(x=>x.id===bid);const bCur=b?b.currency:baseCur;return allExpRaw.filter(e=>e.budgetId===bid).reduce((s,e)=>s+toBudgetCur(e.amount,e.currency,bCur),0);},[allExpRaw,budgets,baseCur,toBudgetCur]);
+  const getBudgetSpent=useCallback((bid)=>{const b=budgets.find(x=>x.id===bid);const bCur=b?b.currency:baseCur;return allExpRaw.filter(e=>e.budgetId===bid).reduce((s,e)=>s+expToBudget(e,bCur),0);},[allExpRaw,budgets,baseCur,expToBudget]);
 
   // Group by date
   const grouped=useMemo(()=>{const g={};filtered.forEach(e=>{const d=e.date;if(!g[d])g[d]=[];g[d].push(e);});return Object.entries(g);},[filtered]);
@@ -1348,11 +1374,11 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
         {chartTab==='budgets'&&(<div style={{width:'100%'}}>{!budgets.length?<p style={{textAlign:'center',color:'var(--text2)',padding:20}}>{T('لا ميزانيات — أضف من ⚙️','No budgets — add from ⚙️',language)}</p>:selBudget?(()=>{
           const b=budgets.find(x=>x.id===selBudget);if(!b)return null;
           const bExps=allExpRaw.filter(e=>e.budgetId===b.id);
-          const spent=bExps.reduce((s,e)=>s+toBudgetCur(e.amount,e.currency,b.currency),0);
+          const spent=bExps.reduce((s,e)=>s+expToBudget(e,b.currency),0);
           const pct=b.totalAmount?Math.min(spent/b.totalAmount*100,100):0;
           const remaining=b.totalAmount-spent;
           // By category with expenses
-          const byC={};bExps.forEach(e=>{const cid=e.category;if(!byC[cid])byC[cid]={amount:0,count:0,items:[]};byC[cid].amount+=toBudgetCur(e.amount,e.currency,b.currency);byC[cid].count++;byC[cid].items.push(e);});
+          const byC={};bExps.forEach(e=>{const cid=e.category;if(!byC[cid])byC[cid]={amount:0,count:0,items:[]};byC[cid].amount+=expToBudget(e,b.currency);byC[cid].count++;byC[cid].items.push(e);});
           Object.values(byC).forEach(v=>v.items.sort((a,b)=>new Date(b.date)-new Date(a.date)));
           const catEntries=Object.entries(byC).sort((a,b)=>b[1].amount-a[1].amount);
           // By date
@@ -1362,41 +1388,43 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
               <button className="btn btn-ghost btn-sm" onClick={()=>setSelBudget(null)}>←</button>
               <span style={{fontSize:24}}>{b.icon}</span>
               <div style={{flex:1}}><div style={{fontWeight:800,fontSize:16,display:'flex',alignItems:'center',gap:6}}>{b.title}{b.closed&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:6,background:'var(--coral-g)',color:'var(--coral)',fontWeight:700}}>🔒 {T('مغلقة','Closed',language)}</span>}</div><div style={{fontSize:11,color:'var(--text2)'}}>{b.startDate&&`${b.startDate} → ${b.endDate||'∞'}`}</div></div>
-              <div style={{display:'flex',gap:4}}>
+              <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                 <button className="btn btn-ghost btn-xs" onClick={()=>setBudModal(b)}>✏️</button>
                 <button className="btn btn-ghost btn-xs" style={{color:'var(--coral)'}} onClick={()=>{onDeleteBudget(b);setSelBudget(null);}}>🗑️</button>
-                <button className="btn btn-gold btn-xs" onClick={()=>{
+                {!b.closed&&<button className="btn btn-coral btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency})}>+ {T('مصروف','Expense',language)}</button>}
+              </div>
+            </div>
+            <div style={{marginBottom:10}}>
+              <button className="btn btn-gold btn-sm" style={{width:'100%',fontSize:12}} onClick={()=>{
                   const bExps2=allExpRaw.filter(e=>e.budgetId===b.id).sort((a,c)=>new Date(a.date)-new Date(c.date));
-                  const r=rates;
-                  const exRate=(fromCur,toCur)=>{if(fromCur===toCur)return 1;const fr=r[fromCur]||1;const tr=r[toCur]||1;return tr/fr;};
                   const hdr=[[T('تقرير ميزانية','Budget Report',language)+': '+b.title],[T('إجمالي الميزانية','Total Budget',language)+': '+b.totalAmount+' '+b.currency],[T('تاريخ التقرير','Report Date',language)+': '+new Date().toLocaleDateString(language==='ar'?'ar-SA':'en-US')],[]];
-                  const cols=[T('التاريخ','Date',language),T('التصنيف','Category',language),T('الوصف','Description',language),T('المبلغ الأصلي','Original Amount',language),T('العملة','Currency',language),T('سعر التحويل','Exchange Rate',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('طريقة الدفع','Payment',language),T('ملاحظات','Notes',language)];
+                  const cols=[T('التاريخ','Date',language),T('التصنيف','Category',language),T('الوصف','Description',language),T('المبلغ الأصلي','Original Amount',language),T('العملة','Currency',language),T('سعر التحويل','Exchange Rate',language),T('مصدر السعر','Rate Source',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('طريقة الدفع','Payment',language),T('ملاحظات','Notes',language)];
                   const rows=[cols];
                   let totalConverted=0;
-                  bExps2.forEach(e=>{const cat=getCat(e.category);const rate=exRate(e.currency,b.currency);const converted=e.amount*rate;totalConverted+=converted;
-                    rows.push([e.date,language==='ar'?cat.name:cat.nameEn,e.title,e.amount,e.currency,e.currency!==b.currency?Math.round(rate*10000)/10000:'—',Math.round(converted*100)/100,e.paymentMethod||'',e.notes||'']);
+                  bExps2.forEach(e=>{const cat=getCat(e.category);
+                    const rate=expRate(e,b.currency);
+                    const converted=e.amount*rate;totalConverted+=converted;
+                    const rateSource=e.savedRates&&e.savedRates[b.currency]?T('محفوظ ✅','Saved ✅',language):T('حالي ⚠️','Current ⚠️',language);
+                    rows.push([e.date,language==='ar'?cat.name:cat.nameEn,e.title,e.amount,e.currency,e.currency!==b.currency?Math.round(rate*10000)/10000:'—',e.currency!==b.currency?rateSource:'—',Math.round(converted*100)/100,e.paymentMethod||'',e.notes||'']);
                   });
                   rows.push([]);
-                  rows.push(['','',T('الإجمالي المصروف','Total Spent',language),'','','',Math.round(totalConverted*100)/100,'','']);
-                  rows.push(['','',T('المتبقي','Remaining',language),'','','',Math.round((b.totalAmount-totalConverted)*100)/100,'','']);
-                  rows.push(['','',T('النسبة المصروفة','% Spent',language),'','','',b.totalAmount?Math.round(totalConverted/b.totalAmount*10000)/100+'%':'0%','','']);
+                  rows.push(['','',T('الإجمالي المصروف','Total Spent',language),'','','','',Math.round(totalConverted*100)/100,'','']);
+                  rows.push(['','',T('المتبقي','Remaining',language),'','','','',Math.round((b.totalAmount-totalConverted)*100)/100,'','']);
+                  rows.push(['','',T('النسبة المصروفة','% Spent',language),'','','','',b.totalAmount?Math.round(totalConverted/b.totalAmount*10000)/100+'%':'0%','','']);
                   rows.push([]);
-                  rows.push([T('ملاحظة: سعر التحويل يعكس السعر وقت تصدير التقرير','Note: Exchange rates reflect rates at time of export',language)]);
+                  rows.push([T('📌 محفوظ = سعر الصرف وقت تسجيل المصروف (دقيق) | ⚠️ حالي = سعر اليوم (مصاريف قديمة قبل التحديث)','📌 Saved = rate at expense entry time (accurate) | ⚠️ Current = today\'s rate (old expenses before update)',language)]);
                   const wb2=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet([...hdr,...rows]);
-                  ws['!cols']=[{wch:12},{wch:16},{wch:25},{wch:14},{wch:8},{wch:14},{wch:16},{wch:12},{wch:20}];
+                  ws['!cols']=[{wch:12},{wch:16},{wch:25},{wch:14},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:20}];
                   XLSX.utils.book_append_sheet(wb2,ws,b.title.slice(0,31));
-                  // Category summary sheet
                   const catSm=[[T('تقرير حسب التصنيف','Category Summary',language)],[]];
                   catSm.push([T('التصنيف','Category',language),T('عدد العمليات','Transactions',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('النسبة','%',language)]);
-                  const byCat2={};bExps2.forEach(e=>{const cid=e.category;if(!byCat2[cid])byCat2[cid]={amt:0,cnt:0};byCat2[cid].amt+=e.amount*exRate(e.currency,b.currency);byCat2[cid].cnt++;});
+                  const byCat2={};bExps2.forEach(e=>{const cid=e.category;if(!byCat2[cid])byCat2[cid]={amt:0,cnt:0};byCat2[cid].amt+=expToBudget(e,b.currency);byCat2[cid].cnt++;});
                   Object.entries(byCat2).sort((a,c)=>c[1].amt-a[1].amt).forEach(([cid,info])=>{const cat=getCat(cid);catSm.push([language==='ar'?cat.name:cat.nameEn,info.cnt,Math.round(info.amt*100)/100,totalConverted?Math.round(info.amt/totalConverted*100)+'%':'0%']);});
                   const ws2=XLSX.utils.aoa_to_sheet(catSm);ws2['!cols']=[{wch:20},{wch:14},{wch:18},{wch:10}];
                   XLSX.utils.book_append_sheet(wb2,ws2,T('ملخص','Summary',language));
                   XLSX.writeFile(wb2,`budget-${b.title}-${localDS()}.xlsx`);
                   toast(T('تم تصدير الميزانية 📤','Budget exported 📤',language));
-                }}>📤 Excel</button>
-                {!b.closed&&<button className="btn btn-coral btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency})}>+ {T('مصروف','Expense',language)}</button>}
-              </div>
+                }}>📤 {T('تصدير الميزانية لإكسل','Export Budget to Excel',language)}</button>
             </div>
 
             <div className="exp-budget-card" style={{marginBottom:14}}>
@@ -1429,12 +1457,12 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
             {Object.entries(byDate).length>0&&<div className="card" style={{padding:14}}>
               <h4 style={{fontSize:13,fontWeight:800,marginBottom:10}}>📅 {T('حسب التاريخ','By Date',language)}</h4>
               {Object.entries(byDate).map(([date,exps])=>(<div key={date}>
-                <div style={{fontSize:11,fontWeight:700,color:'var(--text2)',padding:'8px 0 4px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}><span>{new Date(date+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'short',day:'numeric',month:'short'})}</span><span>{fmtMoney(exps.reduce((s,e)=>s+toBudgetCur(e.amount,e.currency,b.currency),0))} {b.currency}</span></div>
+                <div style={{fontSize:11,fontWeight:700,color:'var(--text2)',padding:'8px 0 4px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between'}}><span>{new Date(date+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'short',day:'numeric',month:'short'})}</span><span>{fmtMoney(exps.reduce((s,e)=>s+expToBudget(e,b.currency),0))} {b.currency}</span></div>
                 {exps.map(e=>{const cat=getCat(e.category);return(
                   <div key={e.id} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
                     <span style={{fontSize:16}}>{cat.icon}</span>
                     <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13}}>{e.title}</div>{e.notes&&<div style={{fontSize:10,color:'var(--text2)'}}>📝 {e.notes.length>40?e.notes.slice(0,40)+'...':e.notes}</div>}</div>
-                    <div style={{textAlign:'end'}}><div style={{fontWeight:800,fontSize:13,color:cat.color}}>{e.amount.toFixed(e.amount%1?2:0)} {e.currency}</div>{e.currency!==b.currency&&<div style={{fontSize:9,color:'var(--text2)'}}>≈ {fmtMoney(toBudgetCur(e.amount,e.currency,b.currency))} {b.currency}</div>}</div>
+                    <div style={{textAlign:'end'}}><div style={{fontWeight:800,fontSize:13,color:cat.color}}>{e.amount.toFixed(e.amount%1?2:0)} {e.currency}</div>{e.currency!==b.currency&&<div style={{fontSize:9,color:'var(--text2)'}}>≈ {fmtMoney(expToBudget(e,b.currency))} {b.currency}{e.savedRates&&<span title={T('سعر محفوظ','Saved rate',language)}> 📌</span>}</div>}</div>
                   </div>);})}
               </div>))}
             </div>}
@@ -2278,8 +2306,44 @@ function App(){
   useEffect(()=>{const h=e=>{e.preventDefault();setInstallPrompt(e);};window.addEventListener('beforeinstallprompt',h);return()=>window.removeEventListener('beforeinstallprompt',h);},[]);
   const handleInstall=useCallback(async()=>{if(!installPrompt)return;installPrompt.prompt();const{outcome}=await installPrompt.userChoice;if(outcome==='accepted')toast(T('تم التثبيت! 📱','Installed! 📱',lang));setInstallPrompt(null);},[installPrompt,toast,lang]);
 
-  const load=useCallback(async()=>{const d={};for(const s of ST)d[s]=await dAll(s);setData(d);},[]);
-  useEffect(()=>{(async()=>{await initCats();await load();})();},[load]);
+  const load=useCallback(async()=>{
+    const d={};for(const s of ST)d[s]=await dAll(s);setData(d);
+    // Auto-backup: save snapshot to localStorage after every load
+    try{
+      const total=Object.values(d).reduce((s,a)=>s+a.length,0);
+      if(total>0){
+        const backup=JSON.stringify(d);
+        localStorage.setItem('gt-auto-backup',backup);
+        localStorage.setItem('gt-auto-backup-date',new Date().toISOString());
+        localStorage.setItem('gt-auto-backup-count',String(total));
+      }
+    }catch(e){/* localStorage full — ignore */}
+  },[]);
+  const[restorePrompt,setRestorePrompt]=useState(null);
+  useEffect(()=>{(async()=>{
+    await initCats();await load();
+    // Check if data is empty but backup exists
+    const d={};for(const s of ST)d[s]=await dAll(s);
+    const total=Object.values(d).reduce((s,a)=>s+a.length,0);
+    if(total<=DEF_CATS.length){ // only default categories exist
+      const backup=localStorage.getItem('gt-auto-backup');
+      const backupDate=localStorage.getItem('gt-auto-backup-date');
+      const backupCount=localStorage.getItem('gt-auto-backup-count');
+      if(backup&&backupCount&&parseInt(backupCount)>DEF_CATS.length){
+        setRestorePrompt({date:backupDate,count:backupCount});
+      }
+    }
+  })();},[load]);
+  const handleRestore=useCallback(async()=>{
+    try{
+      const backup=JSON.parse(localStorage.getItem('gt-auto-backup'));
+      if(!backup)return;
+      for(const s of ST){await dClr(s);if(backup[s])for(const it of backup[s])await dPut(s,it);}
+      await initCats();await load();
+      toast(T('🎉 تم استعادة البيانات بنجاح!','🎉 Data restored successfully!',lang),'success');
+      setRestorePrompt(null);
+    }catch(e){toast(T('خطأ في الاستعادة','Restore error',lang),'error');}
+  },[load,toast,lang]);
   useEffect(()=>{document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';},[lang]);
   useEffect(()=>{document.documentElement.className=theme==='light'?'light':'';localStorage.setItem('gt-theme',theme);},[theme]);
   useNotifications(data,lang);
@@ -2351,8 +2415,8 @@ function App(){
 
   // Expense handlers
   const handleSaveExpense=useCallback(async(e)=>{await dPut('expenses',e);await load();toast(T('تم حفظ المصروف 💰','Expense saved 💰',lang));
-    // Budget warning with currency conversion
-    if(e.budgetId){const allE=await dAll('expenses');const b=(await dAll('budgets')).find(b=>b.id===e.budgetId);if(b){const r=getStoredRates().rates;const spent=allE.filter(x=>x.budgetId===b.id).reduce((s,x)=>s+convertAmount(x.amount,x.currency,b.currency,r),0);const pct=b.totalAmount?spent/b.totalAmount*100:0;if(pct>=100)toast(T(`🔴 تجاوزت ميزانية "${b.title}"!`,`🔴 Over budget "${b.title}"!`,lang),'error');else if(pct>=80)toast(T(`⚠️ وصلت ${Math.round(pct)}% من "${b.title}"`,`⚠️ ${Math.round(pct)}% of "${b.title}"`,lang),'warning');}}
+    // Budget warning using saved rates
+    if(e.budgetId){const allE=await dAll('expenses');const b=(await dAll('budgets')).find(b=>b.id===e.budgetId);if(b){const r=getStoredRates().rates;const spent=allE.filter(x=>x.budgetId===b.id).reduce((s,x)=>s+convertWithSavedRate(x,b.currency,r),0);const pct=b.totalAmount?spent/b.totalAmount*100:0;if(pct>=100)toast(T(`🔴 تجاوزت ميزانية "${b.title}"!`,`🔴 Over budget "${b.title}"!`,lang),'error');else if(pct>=80)toast(T(`⚠️ وصلت ${Math.round(pct)}% من "${b.title}"`,`⚠️ ${Math.round(pct)}% of "${b.title}"`,lang),'warning');}}
   },[load,toast,lang]);
   const handleDeleteExpense=useCallback((e)=>{setConfirm({message:T(`حذف "${e.title}"؟`,`Delete "${e.title}"?`,lang),onOk:async()=>{await dDel('expenses',e.id);await load();toast(T('تم الحذف','Deleted',lang));setConfirm(null);}});},[lang,load,toast]);
   const handleSaveCategory=useCallback(async(c)=>{await dPut('categories',c);await load();toast(T('تم حفظ التصنيف','Category saved',lang));},[load,toast,lang]);
@@ -2447,6 +2511,19 @@ function App(){
       {expFromCal&&<ExpenseModal expense={{_isNew:true,date:expFromCal}} categories={data.categories||[]} budgets={data.budgets||[]} language={lang} onSave={async e=>{await handleSaveExpense(e);setExpFromCal(null);}} onClose={()=>setExpFromCal(null)}/>}
       {uploadModal&&<UploadModal language={lang} onImport={handleXlsxImport} onClose={()=>setUploadModal(false)}/>}
       {notifModal&&<NotifSettingsModal language={lang} toast={toast} onClose={()=>setNotifModal(false)}/>}
+      {restorePrompt&&<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400,textAlign:'center',padding:30}}>
+        <div style={{fontSize:48,marginBottom:16}}>💾</div>
+        <h3 style={{fontSize:18,fontWeight:800,marginBottom:10,color:'var(--gold)'}}>{T('تم العثور على نسخة احتياطية!','Backup Found!',lang)}</h3>
+        <p style={{fontSize:13,color:'var(--text2)',marginBottom:6}}>{T('يبدو أن بياناتك حُذفت، لكن توجد نسخة احتياطية تلقائية','Your data seems deleted, but an auto-backup exists',lang)}</p>
+        <div style={{background:'var(--bg3)',borderRadius:12,padding:12,marginBottom:16}}>
+          <div style={{fontSize:12,fontWeight:700}}>{T('التاريخ','Date',lang)}: {restorePrompt.date?new Date(restorePrompt.date).toLocaleString(lang==='ar'?'ar-SA':'en-US'):'-'}</div>
+          <div style={{fontSize:12,fontWeight:700,color:'var(--teal)'}}>{restorePrompt.count} {T('عنصر','items',lang)}</div>
+        </div>
+        <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+          <button className="btn btn-ghost" onClick={()=>setRestorePrompt(null)}>{T('تجاهل','Ignore',lang)}</button>
+          <button className="btn btn-teal" onClick={handleRestore}>🔄 {T('استعادة البيانات','Restore Data',lang)}</button>
+        </div>
+      </div></div>}
     </div>);
 }
 ReactDOM.render(<App/>,document.getElementById('root'));
