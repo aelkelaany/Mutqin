@@ -169,12 +169,12 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .note-type-tabs{display:flex;gap:4px;overflow-x:auto;padding-bottom:4px}
 .note-reminder-badge{display:inline-flex;align-items:center;gap:3px;padding:2px 6px;border-radius:6px;font-size:9px;font-weight:700;background:var(--gold-g);color:var(--gold)}
 .light .exp-tab{background:var(--bg3);border-color:var(--border)}
-.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);z-index:40;padding:6px 8px;padding-bottom:max(6px,env(safe-area-inset-bottom));display:flex;justify-content:space-around}
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--bg2);border-top:1px solid var(--border);z-index:40;padding:4px 4px;padding-bottom:max(4px,env(safe-area-inset-bottom));display:flex;justify-content:space-around}
 @media(min-width:768px){.bottom-nav{display:none}}
-.bnav-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:6px 4px;border-radius:14px;cursor:pointer;transition:all .2s;color:var(--text2);font-size:9px;font-weight:600;position:relative;min-width:0}
+.bnav-item{display:flex;flex-direction:column;align-items:center;gap:1px;padding:4px 2px;border-radius:12px;cursor:pointer;transition:all .2s;color:var(--text2);font-size:8px;font-weight:600;position:relative;min-width:0;flex:1}
 .bnav-item.active{color:var(--coral)}
-.bnav-item.active::before{content:'';position:absolute;top:-6px;width:24px;height:3px;border-radius:0 0 4px 4px;background:var(--coral)}
-.bnav-item span:first-child{font-size:20px;line-height:1}
+.bnav-item.active::before{content:'';position:absolute;top:-4px;width:20px;height:2.5px;border-radius:0 0 4px 4px;background:var(--coral)}
+.bnav-item span:first-child{font-size:18px;line-height:1}
 .dnav{display:none}@media(min-width:768px){.dnav{display:flex}}
 .dnav-item{padding:8px 18px;border-radius:14px;cursor:pointer;transition:all .25s;display:flex;align-items:center;gap:8px;color:var(--text2);font-weight:600;font-size:14px}
 .dnav-item:hover{background:var(--bg3);color:var(--text)}
@@ -198,6 +198,17 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
   .desk-split .cal-col{position:sticky;top:80px}
   .note-box{font-size:13px!important}
   .badge{font-size:12px!important;padding:4px 10px!important}
+}
+/* Mobile optimizations */
+@media(max-width:767px){
+  .card{border-radius:16px}
+  .badge{font-size:9px;padding:2px 6px}
+  .field{padding:10px 14px;font-size:13px;border-radius:12px}
+  .btn-sm{padding:6px 12px;font-size:11px}
+  .btn-xs{padding:4px 8px;font-size:10px}
+  header{padding:8px 10px!important}
+  .filter-chips{gap:4px}
+  .filter-chip{padding:4px 10px;font-size:11px}
 }
 @media(min-width:1100px){
   .desktop-layout{max-width:1400px!important}
@@ -392,59 +403,156 @@ function SortBtn({sort,onToggle,language}){
 const sortItems=(items,sort,dateKey='dueDate')=>{if(sort==='none')return items;return[...items].sort((a,b)=>{const da=new Date(a[dateKey]||'9999'),db=new Date(b[dateKey]||'9999');return sort==='asc'?da-db:db-da;});};
 const nextSort=s=>s==='none'?'asc':s==='asc'?'desc':'none';
 
-// ========== STATS BAR ==========
-function StatsBar({data,language}){
+// ========== ANALYTICS DASHBOARD ==========
+function AnalyticsDashboard({data,language}){
+  const[period,setPeriod]=useState('week'); // week, month, all
+  const T2=(a,e)=>T(a,e,language);
+  const allT=useMemo(()=>[...(data.tasks||[]),...(data.quickTasks||[])],[data.tasks,data.quickTasks]);
+  const today=localDS();
+  const periodStart=useMemo(()=>{
+    const d=new Date();
+    if(period==='week')d.setDate(d.getDate()-7);
+    else if(period==='month')d.setMonth(d.getMonth()-1);
+    else d.setFullYear(2020);
+    return localDS(d);
+  },[period]);
+
   const stats=useMemo(()=>{
-    const allT=[...(data.tasks||[]),...(data.quickTasks||[])];
     const done=allT.filter(t=>t.status==='complete').length;
     const prog=allT.filter(t=>t.status==='inProgress'||t.status==='partial').length;
     const pend=allT.filter(t=>!t.status||t.status==='notStarted').length;
     const total=allT.length;
     const pct=total?Math.round(done/total*100):0;
-    const today=new Date();today.setHours(0,0,0,0);
+    // Streak
+    const td=new Date();td.setHours(0,0,0,0);
     let streak=0;
     for(let i=0;i<365;i++){
-      const d=new Date(today);d.setDate(d.getDate()-i);
-      const ds=localDS(d);
+      const d=new Date(td);d.setDate(d.getDate()-i);const ds=localDS(d);
       const dayDone=allT.some(t=>{if(t.status!=='complete')return false;const ul=t.updatedAt?localDS(new Date(t.updatedAt)):null;const cl=t.createdAt?localDS(new Date(t.createdAt)):null;return ul===ds||cl===ds||(t.dueDate||'').startsWith(ds);});
       if(dayDone)streak++;else if(i>0)break;
     }
-    return{done,prog,pend,pct,streak};
-  },[data.tasks,data.quickTasks]);
-  return(<div className="stats-grid">
-    <div className="stat-card"><span className="sv" style={{color:'var(--lime)'}}>{stats.done}</span><span className="sl">✅ {T('مكتمل','Done',language)}</span></div>
-    <div className="stat-card"><span className="sv" style={{color:'var(--teal)'}}>{stats.prog}</span><span className="sl">⚡ {T('جارٍ','Active',language)}</span></div>
-    <div className="stat-card"><span className="sv" style={{color:'var(--text2)'}}>{stats.pend}</span><span className="sl">⏳ {T('معلّق','Pending',language)}</span></div>
-    <div className="stat-card"><span className="sv" style={{color:'var(--gold)'}}>{stats.pct}%</span><span className="sl">📊 {T('الإنجاز','Progress',language)}</span></div>
-    <div className="stat-card"><span className="sv streak-badge" style={{fontSize:16,padding:'4px 10px',margin:'0 auto'}}>🔥 {stats.streak}</span><span className="sl">{T('أيام متتالية','Day streak',language)}</span></div>
-  </div>);
-}
+    // Period tasks
+    const periodT=allT.filter(t=>{const d=t.completedAt||t.updatedAt||t.createdAt||'';return d.slice(0,10)>=periodStart;});
+    const periodDone=periodT.filter(t=>t.status==='complete').length;
+    // Avg duration (only tasks with both startedAt and completedAt)
+    const withDur=allT.filter(t=>t.startedAt&&t.completedAt);
+    const avgDurMins=withDur.length?Math.round(withDur.reduce((s,t)=>(new Date(t.completedAt)-new Date(t.startedAt))/(1000*60)+s,0)/withDur.length):0;
+    // Overdue
+    const overdue=allT.filter(t=>t.dueDate&&t.dueDate<today&&t.status!=='complete').length;
+    // Deferred count
+    const totalDeferred=allT.reduce((s,t)=>s+(t.deferCount||0),0);
+    // By tag
+    const byTag={};allT.filter(t=>t.tags&&t.tags.length).forEach(t=>{t.tags.forEach(tid=>{if(!byTag[tid])byTag[tid]={total:0,done:0};byTag[tid].total++;if(t.status==='complete')byTag[tid].done++;});});
+    // By priority
+    const byPri={high:{t:0,d:0},medium:{t:0,d:0},low:{t:0,d:0}};
+    allT.forEach(t=>{const p=t.priority||'medium';if(byPri[p]){byPri[p].t++;if(t.status==='complete')byPri[p].d++;}});
+    // Best day of week
+    const byDow=[0,0,0,0,0,0,0];
+    allT.filter(t=>t.status==='complete'&&(t.completedAt||t.updatedAt)).forEach(t=>{const d=new Date(t.completedAt||t.updatedAt);byDow[d.getDay()]++;});
+    const bestDowIdx=byDow.indexOf(Math.max(...byDow));
+    const dowNames=language==='ar'?['الأحد','الإثنين','الثلاثاء','الأربعاء','الخميس','الجمعة','السبت']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];
+    // Productivity score (0-100)
+    const completionRate=total?done/total:0;
+    const streakBonus=Math.min(streak/30,1);
+    const overdueP=total?1-overdue/total:1;
+    const deferP=total?1-(totalDeferred/(total*3)):1;
+    const prodScore=Math.round((completionRate*40+streakBonus*20+overdueP*25+Math.max(0,deferP)*15));
+    return{done,prog,pend,pct,streak,total,periodDone,avgDurMins,overdue,totalDeferred,byTag,byPri,bestDay:dowNames[bestDowIdx],byDow,dowNames,prodScore};
+  },[allT,periodStart,today,language]);
 
-// ========== WEEKLY CHART ==========
-function WeeklyChart({data,language}){
-  const allT=[...(data.tasks||[]),...(data.quickTasks||[])];
-  const today=new Date();
-  const bars=[];
-  for(let i=6;i>=0;i--){
-    const d=new Date(today);d.setDate(d.getDate()-i);
-    const ds=localDS(d);
-    const dayDue=allT.filter(t=>(t.dueDate||'').startsWith(ds));
-    const dayCompleted=allT.filter(t=>{if(t.status!=='complete')return false;const ul=t.updatedAt?localDS(new Date(t.updatedAt)):null;return ul===ds||(!t.updatedAt&&t.dueDate&&t.dueDate.startsWith(ds));});
-    const dn=d.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'short'});
-    bars.push({label:dn,done:dayCompleted.length,total:Math.max(dayDue.length,dayCompleted.length),ds});
-  }
+  // Weekly bars
+  const bars=useMemo(()=>{
+    const td=new Date();const b=[];
+    for(let i=6;i>=0;i--){const d=new Date(td);d.setDate(d.getDate()-i);const ds=localDS(d);
+      const dayDue=allT.filter(t=>(t.dueDate||'').startsWith(ds));
+      const dayDone=allT.filter(t=>{if(t.status!=='complete')return false;const ul=t.completedAt?localDS(new Date(t.completedAt)):t.updatedAt?localDS(new Date(t.updatedAt)):null;return ul===ds||(t.dueDate||'').startsWith(ds);});
+      b.push({label:d.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'short'}),done:dayDone.length,total:Math.max(dayDue.length,dayDone.length),isToday:ds===today});}
+    return b;
+  },[allT,today,language]);
   const maxV=Math.max(...bars.map(b=>Math.max(b.total,b.done)),1);
-  return(<div className="card" style={{padding:14,marginBottom:16}}>
-    <div style={{fontSize:13,fontWeight:800,marginBottom:10}}>📊 {T('إنجاز الأسبوع','This Week',language)}</div>
-    <div className="chart-bar-wrap">{bars.map((b,i)=>(
-      <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
-        <div style={{width:'100%',height:80,display:'flex',flexDirection:'column',justifyContent:'flex-end',gap:1}}>
-          <div className="chart-bar" data-tip={`${b.done}/${b.total}`} style={{height:`${b.total?b.done/maxV*100:0}%`,background:'var(--lime)',minHeight:b.done?4:0}}/>
-          <div className="chart-bar" data-tip={`${b.total-b.done} ${T('متبقي','left',language)}`} style={{height:`${b.total?(b.total-b.done)/maxV*100:0}%`,background:'var(--bg3)',minHeight:b.total-b.done?4:0}}/>
+
+  // Score color
+  const scoreColor=stats.prodScore>=75?'var(--lime)':stats.prodScore>=50?'var(--gold)':'var(--coral)';
+  const scoreLabel=stats.prodScore>=75?T2('ممتاز','Excellent'):stats.prodScore>=50?T2('جيد','Good'):T2('يحتاج تحسين','Needs Work');
+
+  return(<div style={{display:'flex',flexDirection:'column',gap:12,marginBottom:16}}>
+    {/* Row 1: Score + Core Stats */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+      <div className="card" style={{padding:16,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',background:`linear-gradient(135deg,${scoreColor}08,${scoreColor}15)`}}>
+        <div style={{position:'relative',width:80,height:80}}>
+          <svg width="80" height="80" style={{transform:'rotate(-90deg)'}}><circle cx="40" cy="40" r="34" fill="none" stroke="var(--bg3)" strokeWidth="6"/><circle cx="40" cy="40" r="34" fill="none" stroke={scoreColor} strokeWidth="6" strokeLinecap="round" strokeDasharray={2*Math.PI*34} strokeDashoffset={2*Math.PI*34*(1-stats.prodScore/100)} style={{transition:'all .8s'}}/></svg>
+          <div style={{position:'absolute',inset:0,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center'}}><span style={{fontSize:22,fontWeight:900,color:scoreColor}}>{stats.prodScore}</span></div>
         </div>
-        <span style={{fontSize:10,color:'var(--text2)',fontWeight:600}}>{b.label}</span>
+        <span style={{fontSize:11,fontWeight:700,color:scoreColor,marginTop:4}}>{scoreLabel}</span>
+        <span style={{fontSize:9,color:'var(--text2)'}}>{T2('نقاط الإنتاجية','Productivity Score')}</span>
       </div>
-    ))}</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}>
+        <div className="card" style={{padding:10,textAlign:'center'}}><div style={{fontSize:22,fontWeight:900,color:'var(--lime)'}}>{stats.done}</div><div style={{fontSize:9,color:'var(--text2)',fontWeight:600}}>✅ {T2('مكتمل','Done')}</div></div>
+        <div className="card" style={{padding:10,textAlign:'center'}}><div style={{fontSize:22,fontWeight:900,color:'var(--teal)'}}>{stats.prog}</div><div style={{fontSize:9,color:'var(--text2)',fontWeight:600}}>⚡ {T2('جارٍ','Active')}</div></div>
+        <div className="card" style={{padding:10,textAlign:'center'}}><div style={{fontSize:22,fontWeight:900,color:'var(--coral)'}}>{stats.overdue}</div><div style={{fontSize:9,color:'var(--text2)',fontWeight:600}}>🔴 {T2('متأخر','Overdue')}</div></div>
+        <div className="card" style={{padding:10,textAlign:'center'}}><div className="streak-badge" style={{fontSize:14,fontWeight:900,display:'inline-block',padding:'2px 8px'}}>🔥 {stats.streak}</div><div style={{fontSize:9,color:'var(--text2)',fontWeight:600}}>{T2('متتالية','Streak')}</div></div>
+      </div>
+    </div>
+
+    {/* Row 2: Weekly Chart */}
+    <div className="card" style={{padding:14}}>
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}>
+        <span style={{fontSize:13,fontWeight:800}}>📊 {T2('إنجاز الأسبوع','This Week')}</span>
+        <span style={{fontSize:11,color:'var(--text2)',fontWeight:600}}>{stats.periodDone} {T2('مهمة هذا الأسبوع','tasks this week')}</span>
+      </div>
+      <div className="chart-bar-wrap">{bars.map((b,i)=>(
+        <div key={i} style={{flex:1,display:'flex',flexDirection:'column',alignItems:'center',gap:3}}>
+          <div style={{fontSize:10,fontWeight:700,color:b.done?'var(--lime)':'var(--text2)',minHeight:14}}>{b.done||''}</div>
+          <div style={{width:'100%',height:60,display:'flex',flexDirection:'column',justifyContent:'flex-end',gap:1,borderRadius:6,overflow:'hidden'}}>
+            <div style={{height:`${b.total?b.done/maxV*100:0}%`,background:b.isToday?'var(--coral)':'var(--lime)',borderRadius:4,minHeight:b.done?4:0,transition:'height .5s'}}/>
+            <div style={{height:`${b.total?(b.total-b.done)/maxV*100:0}%`,background:'var(--bg3)',borderRadius:4,minHeight:b.total-b.done?4:0}}/>
+          </div>
+          <span style={{fontSize:10,color:b.isToday?'var(--coral)':'var(--text2)',fontWeight:b.isToday?800:600}}>{b.label}</span>
+        </div>
+      ))}</div>
+    </div>
+
+    {/* Row 3: Insights Grid */}
+    <div style={{display:'grid',gridTemplateColumns:'1fr 1fr 1fr',gap:8}}>
+      <div className="card" style={{padding:10,textAlign:'center'}}><div style={{fontSize:16,fontWeight:900,color:'var(--gold)'}}>{stats.avgDurMins?stats.avgDurMins<60?stats.avgDurMins+T2('د','m'):Math.round(stats.avgDurMins/60)+T2('س','h'):'—'}</div><div style={{fontSize:9,color:'var(--text2)',fontWeight:600}}>⏱️ {T2('متوسط المدة','Avg Duration')}</div></div>
+      <div className="card" style={{padding:10,textAlign:'center'}}><div style={{fontSize:16,fontWeight:900,color:'var(--electric)'}}>{stats.bestDay}</div><div style={{fontSize:9,color:'var(--text2)',fontWeight:600}}>🏆 {T2('أفضل يوم','Best Day')}</div></div>
+      <div className="card" style={{padding:10,textAlign:'center'}}><div style={{fontSize:16,fontWeight:900,color:'var(--gold)'}}>{stats.totalDeferred}</div><div style={{fontSize:9,color:'var(--text2)',fontWeight:600}}>⏩ {T2('ترحيلات','Deferrals')}</div></div>
+    </div>
+
+    {/* Row 4: By Priority */}
+    <div className="card" style={{padding:14}}>
+      <div style={{fontSize:12,fontWeight:800,marginBottom:10}}>🎯 {T2('حسب الأولوية','By Priority')}</div>
+      <div style={{display:'flex',flexDirection:'column',gap:8}}>
+        {[{k:'high',l:T2('عالية','High'),c:'var(--coral)',i:'🔥'},{k:'medium',l:T2('متوسطة','Medium'),c:'var(--gold)',i:'⚡'},{k:'low',l:T2('منخفضة','Low'),c:'var(--lime)',i:'🌱'}].map(p=>{
+          const d=stats.byPri[p.k];const pct=d.t?Math.round(d.d/d.t*100):0;
+          return(<div key={p.k} style={{display:'flex',alignItems:'center',gap:8}}>
+            <span style={{fontSize:14,width:20}}>{p.i}</span>
+            <span style={{fontSize:11,fontWeight:700,width:50,color:p.c}}>{p.l}</span>
+            <div style={{flex:1,height:8,borderRadius:6,background:'var(--bg3)',overflow:'hidden'}}><div style={{height:'100%',width:`${pct}%`,background:p.c,borderRadius:6,transition:'width .5s'}}/></div>
+            <span style={{fontSize:11,fontWeight:700,color:p.c,minWidth:40,textAlign:'end'}}>{d.d}/{d.t}</span>
+          </div>);
+        })}
+      </div>
+    </div>
+
+    {/* Row 5: By Tag */}
+    {Object.keys(stats.byTag).length>0&&<div className="card" style={{padding:14}}>
+      <div style={{fontSize:12,fontWeight:800,marginBottom:10}}>🏷️ {T2('حسب الوسم','By Tag')}</div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:8}}>
+        {Object.entries(stats.byTag).sort((a,b)=>b[1].total-a[1].total).map(([tid,info])=>{
+          const tag=DEF_TAGS.find(t=>t.id===tid);if(!tag)return null;
+          const pct=info.total?Math.round(info.done/info.total*100):0;
+          return(<div key={tid} style={{flex:'1 1 calc(50% - 4px)',minWidth:120,padding:10,borderRadius:12,border:`1.5px solid ${tag.color}33`,background:`${tag.color}08`}}>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:6}}>
+              <span style={{fontSize:11,fontWeight:700,color:tag.color}}>{tag.icon} {language==='ar'?tag.name:tag.nameEn}</span>
+              <span style={{fontSize:10,fontWeight:800,color:tag.color}}>{pct}%</span>
+            </div>
+            <div style={{height:5,borderRadius:4,background:'var(--bg3)',overflow:'hidden'}}><div style={{height:'100%',width:`${pct}%`,background:tag.color,borderRadius:4}}/></div>
+            <div style={{fontSize:9,color:'var(--text2)',marginTop:4,fontWeight:600}}>{info.done}/{info.total} {T2('مكتمل','done')}</div>
+          </div>);
+        })}
+      </div>
+    </div>}
   </div>);
 }
 
@@ -508,7 +616,7 @@ function Pomodoro({language}){
 }
 
 // ========== SEARCH & FILTER ==========
-function SearchFilter({language,search,onSearch,filter,onFilter}){
+function SearchFilter({language,search,onSearch,filter,onFilter,tagFilter,onTagFilter}){
   return(<div>
     <div className="search-wrap"><span className="search-icon">🔍</span>
       <input className="field" style={{paddingRight:36,paddingLeft:36}} placeholder={T('بحث في المهام...','Search tasks...',language)} value={search} onChange={e=>onSearch(e.target.value)}/>
@@ -518,6 +626,11 @@ function SearchFilter({language,search,onSearch,filter,onFilter}){
       {[{id:'all',l:T('الكل','All',language),ic:'📋'},{id:'notStarted',l:T('معلّق','Pending',language),ic:'⏳'},{id:'inProgress',l:T('جارٍ','Active',language),ic:'⚡'},{id:'complete',l:T('مكتمل','Done',language),ic:'✅'},{id:'blocked',l:T('محجوب','Blocked',language),ic:'🔒'}].map(f=>(
         <div key={f.id} className={`filter-chip ${filter===f.id?'active':''}`} onClick={()=>onFilter(f.id)}>{f.ic} {f.l}</div>
       ))}
+    </div>
+    <div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:6}}>
+      {DEF_TAGS.map(tag=>{const sel=tagFilter===tag.id;return(
+        <div key={tag.id} onClick={()=>onTagFilter(sel?'':tag.id)} style={{padding:'3px 8px',borderRadius:14,fontSize:10,fontWeight:700,cursor:'pointer',border:`1.5px solid ${sel?tag.color:'transparent'}`,background:sel?tag.color+'22':'var(--bg3)',color:sel?tag.color:'var(--text2)',transition:'all .15s'}}>{tag.icon} {language==='ar'?tag.name:tag.nameEn}</div>
+      );})}
     </div>
   </div>);
 }
@@ -846,7 +959,7 @@ function UploadModal({ language, onImport, onClose }) {
 // ========== ITEM MODAL ==========
 function ItemModal({type,editItem,goalId,milestoneId,language,onSave,onClose,allTasks}){
   const isE=editItem&&editItem.id;
-  const defs={goal:{title:'',description:'',icon:'🎯',color:'#FF6B6B',startDate:localDS(),endDate:''},milestone:{title:'',description:'',icon:'📍',dueDate:''},task:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',repeat:'never',repeatStartDate:'',repeatEndDate:'',autoDefer:'none',notes:'',blockedBy:''},quickTask:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',notes:''},meeting:{title:'',description:'',icon:'👥',meetingDate:'',attendees:'',location:'',notes:'',minutes:'',decisions:'',meetingStatus:'scheduled',originalMeetingDate:''}};
+  const defs={goal:{title:'',description:'',icon:'🎯',color:'#FF6B6B',startDate:localDS(),endDate:''},milestone:{title:'',description:'',icon:'📍',dueDate:''},task:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',repeat:'never',repeatStartDate:'',repeatEndDate:'',autoDefer:'none',notes:'',blockedBy:'',tags:[]},quickTask:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',notes:'',tags:[]},meeting:{title:'',description:'',icon:'👥',meetingDate:'',attendees:'',location:'',notes:'',minutes:'',decisions:'',meetingStatus:'scheduled',originalMeetingDate:''}};
   const[f,setF]=useState({...defs[type],...(editItem||{})});const u=(k,v)=>setF(p=>({...p,[k]:v}));
   const save=()=>{if(!f.title.trim())return;const now=new Date().toISOString();let item=isE?{...f,updatedAt:now}:{...f,id:uid(),createdAt:now};if(type==='task'&&!isE)item.milestoneId=milestoneId;if(type==='milestone'&&!isE)item.goalId=goalId;onSave(type,item);};
   const ic=type==='goal'?ICONS.goals:type==='milestone'?ICONS.milestones:type==='meeting'?ICONS.meetings:ICONS.tasks;
@@ -861,7 +974,9 @@ function ItemModal({type,editItem,goalId,milestoneId,language,onSave,onClose,all
         <div><span className="label">{T('الوصف','Description',language)}</span><textarea className="field" rows={2} value={f.description} onChange={e=>u('description',e.target.value)}/></div>
         {type==='goal'&&<><div><span className="label">{T('اللون','Color',language)}</span><ColPick sel={f.color} onSel={v=>u('color',v)}/></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div><span className="label">{T('البدء','Start',language)}</span><input type="date" className="field" value={f.startDate} onChange={e=>u('startDate',e.target.value)}/></div><div><span className="label">{T('الانتهاء','End',language)}</span><input type="date" className="field" value={f.endDate} onChange={e=>u('endDate',e.target.value)}/></div></div></>}
         {type==='milestone'&&<div><span className="label">{T('التاريخ','Due',language)}</span><input type="date" className="field" value={f.dueDate||''} onChange={e=>u('dueDate',e.target.value)}/></div>}
-        {(type==='task'||type==='quickTask')&&<><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div><span className="label">{T('التاريخ','Due',language)}</span><input type="date" className="field" value={f.dueDate||''} onChange={e=>u('dueDate',e.target.value)}/></div><div><span className="label">{T('الأولوية','Priority',language)}</span><select className="field" value={f.priority} onChange={e=>u('priority',e.target.value)}><option value="low">🟢 {T('منخفضة','Low',language)}</option><option value="medium">🟡 {T('متوسطة','Medium',language)}</option><option value="high">🔴 {T('عالية','High',language)}</option></select></div></div>{type==='task'&&<><div><span className="label">{T('التكرار','Repeat',language)}</span><select className="field" value={f.repeat||'never'} onChange={e=>u('repeat',e.target.value)}><option value="never">{T('بدون','Never',language)}</option><option value="daily">🔄 {T('يومياً','Daily',language)}</option><option value="weekly">🔄 {T('أسبوعياً','Weekly',language)}</option><option value="monthly">🔄 {T('شهرياً','Monthly',language)}</option></select>{f.repeat&&f.repeat!=='never'&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:12}}><div><span className="label" style={{fontSize:11}}>{T('من','From',language)}</span><input type="date" className="field" value={f.repeatStartDate||''} onChange={e=>u('repeatStartDate',e.target.value)}/></div><div><span className="label" style={{fontSize:11}}>{T('إلى','To',language)}</span><input type="date" className="field" value={f.repeatEndDate||''} onChange={e=>u('repeatEndDate',e.target.value)}/></div></div>}</div>
+        {(type==='task'||type==='quickTask')&&<><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div><span className="label">{T('التاريخ','Due',language)}</span><input type="date" className="field" value={f.dueDate||''} onChange={e=>u('dueDate',e.target.value)}/></div><div><span className="label">{T('الأولوية','Priority',language)}</span><select className="field" value={f.priority} onChange={e=>u('priority',e.target.value)}><option value="low">🟢 {T('منخفضة','Low',language)}</option><option value="medium">🟡 {T('متوسطة','Medium',language)}</option><option value="high">🔴 {T('عالية','High',language)}</option></select></div></div>
+        <div><span className="label">🏷️ {T('الوسوم','Tags',language)}</span><div style={{display:'flex',gap:5,flexWrap:'wrap'}}>{DEF_TAGS.map(tag=>{const sel=(f.tags||[]).includes(tag.id);return(<div key={tag.id} onClick={()=>{const cur=f.tags||[];u('tags',sel?cur.filter(t=>t!==tag.id):[...cur,tag.id]);}} style={{padding:'5px 10px',borderRadius:20,fontSize:11,fontWeight:700,cursor:'pointer',border:`2px solid ${sel?tag.color:'var(--border)'}`,background:sel?tag.color+'22':'transparent',color:sel?tag.color:'var(--text2)',transition:'all .15s'}}>{tag.icon} {language==='ar'?tag.name:tag.nameEn}</div>);})}</div></div>
+        {type==='task'&&<><div><span className="label">{T('التكرار','Repeat',language)}</span><select className="field" value={f.repeat||'never'} onChange={e=>u('repeat',e.target.value)}><option value="never">{T('بدون','Never',language)}</option><option value="daily">🔄 {T('يومياً','Daily',language)}</option><option value="weekly">🔄 {T('أسبوعياً','Weekly',language)}</option><option value="monthly">🔄 {T('شهرياً','Monthly',language)}</option></select>{f.repeat&&f.repeat!=='never'&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:12}}><div><span className="label" style={{fontSize:11}}>{T('من','From',language)}</span><input type="date" className="field" value={f.repeatStartDate||''} onChange={e=>u('repeatStartDate',e.target.value)}/></div><div><span className="label" style={{fontSize:11}}>{T('إلى','To',language)}</span><input type="date" className="field" value={f.repeatEndDate||''} onChange={e=>u('repeatEndDate',e.target.value)}/></div></div>}</div>
         {depOptions.length>0&&<div><span className="label">🔗 {T('محجوب بواسطة','Blocked by',language)}</span><select className="field" value={f.blockedBy||''} onChange={e=>u('blockedBy',e.target.value)}><option value="">{T('بدون','None',language)}</option>{depOptions.map(t=>(<option key={t.id} value={t.id}>{t.icon} {t.title}</option>))}</select></div>}
         <div style={{background:'var(--gold-g)',border:'1px solid var(--gold)',borderRadius:12,padding:12,marginTop:4}}><span className="label" style={{color:'var(--gold)'}}>⏩ {T('الترحيل التلقائي','Auto-Defer',language)}</span><div style={{fontSize:10,color:'var(--text2)',marginBottom:6}}>{T('عند عدم الإنجاز في الموعد، يتم ترحيل المهمة تلقائياً','If not completed by due date, task auto-defers',language)}</div><div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{[{v:'none',l:T('بدون','None',language),i:'✕'},{v:'daily',l:T('لليوم التالي','Next Day',language),i:'📅'},{v:'weekly',l:T('للأسبوع التالي','Next Week',language),i:'📆'},{v:'monthly',l:T('للشهر التالي','Next Month',language),i:'🗓️'}].map(o=>(<div key={o.v} onClick={()=>u('autoDefer',o.v)} style={{padding:'6px 10px',borderRadius:8,fontSize:11,fontWeight:700,cursor:'pointer',border:`2px solid ${(f.autoDefer||'none')===o.v?'var(--gold)':'var(--border)'}`,background:(f.autoDefer||'none')===o.v?'var(--gold)':'transparent',color:(f.autoDefer||'none')===o.v?'white':'var(--text2)'}}>{o.i} {o.l}</div>))}</div></div></>}</>}
         {type==='meeting'&&<><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div><span className="label">📅 {T('التاريخ','Date',language)}</span><input type="date" className="field" value={(f.meetingDate||'').slice(0,10)} onChange={e=>{const time=(f.meetingDate||'').includes('T')?(f.meetingDate.split('T')[1]||'09:00'):'09:00';u('meetingDate',e.target.value+'T'+time);}}/></div><div><span className="label">🕐 {T('الوقت','Time',language)}</span><input type="time" className="field" value={(f.meetingDate||'').includes('T')?(f.meetingDate.split('T')[1]||'09:00'):''} onChange={e=>{const date=(f.meetingDate||'').slice(0,10)||localDS();u('meetingDate',date+'T'+e.target.value);}}/></div></div>
@@ -921,7 +1036,7 @@ return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropaga
 )}</div></div></div>);}
 
 // ========== VIEWS ==========
-function Dashboard({data,language,onAdd,onEdit,onDelete,onStatus,onReorder,search,filter}){const[eG,setEG]=useState(null);const[eM,setEM]=useState(null);const[msSort,setMsSort]=useState('none');const[tkSort,setTkSort]=useState('none');const gP=useCallback(id=>{const ms=(data.milestones||[]).filter(m=>m.goalId===id);if(!ms.length)return 0;return ms.map(m=>{const ts=(data.tasks||[]).filter(t=>t.milestoneId===m.id);if(!ts.length)return 0;return ts.filter(t=>t.status==='complete').length/ts.length*100;}).reduce((a,b)=>a+b,0)/ms.length;},[data.milestones,data.tasks]);const mP=useCallback(id=>{const ts=(data.tasks||[]).filter(t=>t.milestoneId===id);if(!ts.length)return 0;return ts.filter(t=>t.status==='complete').length/ts.length*100;},[data.tasks]);const sc={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text2)'};const sl={complete:T('مكتمل','Done',language),inProgress:T('جارٍ','Active',language),partial:T('جزئي','Partial',language),notStarted:T('لم يبدأ','Todo',language)};const ns={notStarted:'inProgress',inProgress:'partial',partial:'complete',complete:'notStarted'};const pc={high:'var(--coral)',medium:'var(--gold)',low:'var(--lime)'};
+function Dashboard({data,language,onAdd,onEdit,onDelete,onStatus,onReorder,search,filter,tagFilter}){const[eG,setEG]=useState(null);const[eM,setEM]=useState(null);const[msSort,setMsSort]=useState('none');const[tkSort,setTkSort]=useState('none');const gP=useCallback(id=>{const ms=(data.milestones||[]).filter(m=>m.goalId===id);if(!ms.length)return 0;return ms.map(m=>{const ts=(data.tasks||[]).filter(t=>t.milestoneId===m.id);if(!ts.length)return 0;return ts.filter(t=>t.status==='complete').length/ts.length*100;}).reduce((a,b)=>a+b,0)/ms.length;},[data.milestones,data.tasks]);const mP=useCallback(id=>{const ts=(data.tasks||[]).filter(t=>t.milestoneId===id);if(!ts.length)return 0;return ts.filter(t=>t.status==='complete').length/ts.length*100;},[data.tasks]);const sc={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text2)'};const sl={complete:T('مكتمل','Done',language),inProgress:T('جارٍ','Active',language),partial:T('جزئي','Partial',language),notStarted:T('لم يبدأ','Todo',language)};const ns={notStarted:'inProgress',inProgress:'partial',partial:'complete',complete:'notStarted'};const pc={high:'var(--coral)',medium:'var(--gold)',low:'var(--lime)'};
   const exportGoalXlsx=(g)=>{
     const sl2={complete:language==='ar'?'مكتمل':'Done',inProgress:language==='ar'?'جارٍ':'Active',partial:language==='ar'?'جزئي':'Partial',notStarted:language==='ar'?'لم يبدأ':'Todo'};
     const pr2={high:language==='ar'?'عالية':'High',medium:language==='ar'?'متوسطة':'Medium',low:language==='ar'?'منخفضة':'Low'};
@@ -944,7 +1059,7 @@ function Dashboard({data,language,onAdd,onEdit,onDelete,onStatus,onReorder,searc
 const isBlocked=useCallback((tk)=>{if(!tk.blockedBy)return false;const dep=(data.tasks||[]).find(t=>t.id===tk.blockedBy);return dep&&dep.status!=='complete';},[data.tasks]);
 const depName=useCallback((tk)=>{if(!tk.blockedBy)return'';const dep=(data.tasks||[]).find(t=>t.id===tk.blockedBy);return dep?dep.title:'';},[data.tasks]);
 const matchSearch=useCallback((tk)=>{if(!search)return true;const s=search.toLowerCase();return(tk.title||'').toLowerCase().includes(s)||(tk.description||'').toLowerCase().includes(s)||(tk.notes||'').toLowerCase().includes(s);},[search]);
-const matchFilter=useCallback((tk)=>{if(filter==='all')return true;if(filter==='blocked')return isBlocked(tk);return(tk.status||'notStarted')===filter;},[filter,isBlocked]);
+const matchFilter=useCallback((tk)=>{if(filter!=='all'){if(filter==='blocked'){if(!isBlocked(tk))return false;}else{if((tk.status||'notStarted')!==filter)return false;}}if(tagFilter&&!(tk.tags||[]).includes(tagFilter))return false;return true;},[filter,tagFilter,isBlocked]);
 const getMilestones=useCallback((gid)=>{const raw=sortByOrder((data.milestones||[]).filter(m=>m.goalId===gid));return msSort==='none'?raw:sortItems(raw,msSort,'dueDate');},[data.milestones,msSort]);
 const getTasks=useCallback((msid)=>{const raw=sortByOrder((data.tasks||[]).filter(tk=>tk.milestoneId===msid)).filter(tk=>matchSearch(tk)&&matchFilter(tk));return tkSort==='none'?raw:sortItems(raw,tkSort,'dueDate');},[data.tasks,tkSort,matchSearch,matchFilter]);
 return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2 style={{fontSize:22,fontWeight:900}}>🎯 {T('الأهداف','Goals',language)}</h2><button className="btn btn-coral btn-sm" onClick={()=>onAdd('goal')}>⚡ {T('هدف جديد','New Goal',language)}</button></div>
@@ -955,7 +1070,7 @@ return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{
 <div style={{background:'var(--bg2)',borderRadius:14,padding:12,marginBottom:8,border:'1px solid var(--border)'}}><div style={{display:'flex',alignItems:'center',gap:10,cursor:'pointer'}} onClick={()=>setEM(eM===ms.id?null:ms.id)}>{dragHandle}<span style={{fontSize:22}}>{ms.icon}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14}}>{ms.title}</div>{ms.dueDate&&<div style={{fontSize:11,color:'var(--text2)'}}>{new Date(ms.dueDate).toLocaleDateString(language==='ar'?'ar-SA':'en-US')}</div>}</div><Prog progress={mP(ms.id)} size={38} sw={3} color={g.color}/><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={e=>{e.stopPropagation();onEdit('milestone',ms);}}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={e=>{e.stopPropagation();onDelete('milestones',ms.id,ms.title);}}>🗑️</button></div></div>
 {eM===ms.id&&(<div style={{marginTop:10,paddingTop:10,borderTop:'1px solid var(--border)'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8,flexWrap:'wrap',gap:6}}><span style={{fontSize:12,color:'var(--text2)',fontWeight:700}}>✅ {T('المهام','Tasks',language)}</span><div style={{display:'flex',gap:6,alignItems:'center'}}><SortBtn sort={tkSort} onToggle={()=>setTkSort(s=>nextSort(s))} language={language}/><button className="btn btn-teal btn-xs" onClick={()=>onAdd('task',g.id,ms.id)}>⚡ {T('مهمة','Task',language)}</button></div></div>
 <DragList items={getTasks(ms.id)} onReorder={arr=>onReorder('tasks',arr)} renderItem={(tk,tidx,tDragHandle)=>{const blocked=isBlocked(tk);return(
-<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--border)',opacity:blocked?.5:1}}>{tDragHandle}<div onClick={()=>{if(!blocked)onStatus('tasks',tk,ns[tk.status]);}} style={{width:26,height:26,borderRadius:8,border:`2px solid ${blocked?'var(--coral)':sc[tk.status]}`,background:tk.status==='complete'?sc.complete:blocked?'var(--coral-g)':'transparent',cursor:blocked?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{tk.status==='complete'?'✓':blocked?'🔒':''}</div><span style={{fontSize:16}}>{tk.icon}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span><span className="badge" style={{background:`${pc[tk.priority]}22`,color:pc[tk.priority]}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}{tk.autoDefer&&tk.autoDefer!=='none'&&<span className="badge" style={{background:'var(--gold-g)',color:'var(--gold)'}}>⏩{tk.deferCount?` ${tk.deferCount}×`:''}</span>}{tk.completedAt&&tk.startedAt&&<span className="badge" style={{background:'var(--lime)22',color:'var(--lime)'}}>⏱️ {fmtDuration(tk.startedAt,tk.completedAt,language)}</span>}{tk.startedAt&&!tk.completedAt&&<span className="badge" style={{background:'var(--teal-g)',color:'var(--teal)'}}>▶ {fmtDuration(tk.startedAt,new Date().toISOString(),language)}</span>}{tk.originalDueDate&&<span className="badge" style={{background:'var(--coral-g)',color:'var(--coral)'}}>📌 {tk.originalDueDate}</span>}{blocked&&<span className="dep-badge">🔗 {depName(tk).slice(0,20)}</span>}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>80?tk.notes.slice(0,80)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('task',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('tasks',tk.id,tk.title)}>🗑️</button></div></div>
+<div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--border)',opacity:blocked?.5:1}}>{tDragHandle}<div onClick={()=>{if(!blocked)onStatus('tasks',tk,ns[tk.status]);}} style={{width:26,height:26,borderRadius:8,border:`2px solid ${blocked?'var(--coral)':sc[tk.status]}`,background:tk.status==='complete'?sc.complete:blocked?'var(--coral-g)':'transparent',cursor:blocked?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{tk.status==='complete'?'✓':blocked?'🔒':''}</div><span style={{fontSize:16}}>{tk.icon}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span><span className="badge" style={{background:`${pc[tk.priority]}22`,color:pc[tk.priority]}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}{tk.autoDefer&&tk.autoDefer!=='none'&&<span className="badge" style={{background:'var(--gold-g)',color:'var(--gold)'}}>⏩{tk.deferCount?` ${tk.deferCount}×`:''}</span>}{tk.completedAt&&tk.startedAt&&<span className="badge" style={{background:'var(--lime)22',color:'var(--lime)'}}>⏱️ {fmtDuration(tk.startedAt,tk.completedAt,language)}</span>}{tk.startedAt&&!tk.completedAt&&<span className="badge" style={{background:'var(--teal-g)',color:'var(--teal)'}}>▶ {fmtDuration(tk.startedAt,new Date().toISOString(),language)}</span>}{tk.originalDueDate&&<span className="badge" style={{background:'var(--coral-g)',color:'var(--coral)'}}>📌 {tk.originalDueDate}</span>}{(tk.tags||[]).map(tid=>{const tag=DEF_TAGS.find(t=>t.id===tid);return tag?<span key={tid} className="badge" style={{background:tag.color+'22',color:tag.color}}>{tag.icon} {language==='ar'?tag.name:tag.nameEn}</span>:null;})}{blocked&&<span className="dep-badge">🔗 {depName(tk).slice(0,20)}</span>}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>80?tk.notes.slice(0,80)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('task',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('tasks',tk.id,tk.title)}>🗑️</button></div></div>
 );}}/></div>)}</div>
 )}/></div>)}</div>))}</div>);}
 
@@ -1068,11 +1183,21 @@ function Today({data,language,onAdd,onEdit,onDelete,onStatus,onSaveList,onDelete
 return(<div style={{display:'flex',flexDirection:'column',gap:16}}><h2 style={{fontSize:22,fontWeight:900}}>🔥 {T('اليوم','Today',language)}</h2>
 <div className="card" style={{padding:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--pink)'}}>👥 {T('الاجتماعات','Meetings',language)}</h3><button className="btn btn-pink btn-xs" onClick={()=>onAdd('meeting',null,null,{meetingDate:ts+'T09:00'})}>⚡ {T('جديد','New',language)}</button></div>{!tM.length?(<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>😌 {T('لا اجتماعات','No meetings',language)}</p>):tM.map(m=>(<div key={m.id} style={{display:'flex',alignItems:'flex-start',gap:12,padding:'12px 0',borderBottom:'1px solid var(--border)'}}><div style={{fontSize:28,width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--pink-g)',borderRadius:12,flexShrink:0}}>{m.icon||'👥'}</div><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14,display:'flex',alignItems:'center',gap:6,textDecoration:m.meetingStatus==='cancelled'?'line-through':'none',opacity:m.meetingStatus==='cancelled'?.5:1}}>{m.title}{m.meetingStatus==='done'&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:5,background:'var(--lime-g)',color:'var(--lime)',fontWeight:700}}>✅</span>}{m.meetingStatus==='cancelled'&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:5,background:'var(--coral-g)',color:'var(--coral)',fontWeight:700}}>❌</span>}{m.meetingStatus==='deferred'&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:5,background:'var(--gold-g)',color:'var(--gold)',fontWeight:700}}>⏳</span>}</div><div style={{fontSize:12,color:'var(--text2)',display:'flex',gap:8,flexWrap:'wrap',marginTop:3}}>{m.meetingDate&&<span>🕐 {new Date(m.meetingDate).toLocaleTimeString(language==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'})}</span>}{m.location&&<span>📍 {m.location}</span>}{m.attendees&&<span>👤 {m.attendees}</span>}</div>{m.minutes&&<div className="note-box" style={{background:'var(--pink-g)',borderColor:'var(--pink)'}}>📋 <strong>{T('المحضر','Minutes',language)}:</strong> {m.minutes.length>120?m.minutes.slice(0,120)+'...':m.minutes}</div>}{m.decisions&&<div className="note-box" style={{background:'var(--lime-g)',borderColor:'var(--lime)'}}>✅ <strong>{T('القرارات','Decisions',language)}:</strong> {m.decisions.length>80?m.decisions.slice(0,80)+'...':m.decisions}</div>}{m.notes&&!m.minutes&&<div className="note-box">📝 {m.notes.length>60?m.notes.slice(0,60)+'...':m.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('meeting',m)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('meetings',m.id,m.title)}>🗑️</button></div></div>))}</div>
 
-<div className="card" style={{padding:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--teal)'}}>✅ {T('المهام','Tasks',language)} <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>({all.filter(t=>t.status==='complete').length}/{all.length})</span></h3><button className="btn btn-teal btn-xs" onClick={()=>onAdd('quickTask',null,null,{dueDate:ts})}>⚡ {T('مهمة','Task',language)}</button></div>{!all.length?(<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>🎉 {T('لا مهام','No tasks',language)}</p>):all.map(tk=>(<div key={tk.id} style={{display:'flex',alignItems:'center',gap:8,padding:'10px 0',borderBottom:'1px solid var(--border)'}}><div onClick={()=>onStatus(tk._s,tk,tk._ns[tk.status])} style={{width:26,height:26,borderRadius:8,border:`2px solid ${sc[tk.status]}`,background:tk.status==='complete'?sc.complete:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0}}>{tk.status==='complete'&&'✓'}</div><span style={{fontSize:18}}>{tk.icon||'✅'}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span>{tk.priority&&<span className="badge" style={{background:`${pc[tk.priority]||'var(--text2)'}22`,color:pc[tk.priority]||'var(--text2)'}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>}{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}{tk.completedAt&&tk.startedAt&&<span className="badge" style={{background:'var(--lime)22',color:'var(--lime)'}}>⏱️ {fmtDuration(tk.startedAt,tk.completedAt,language)}</span>}{tk.startedAt&&!tk.completedAt&&<span className="badge" style={{background:'var(--teal-g)',color:'var(--teal)'}}>▶ {fmtDuration(tk.startedAt,new Date().toISOString(),language)}</span>}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>60?tk.notes.slice(0,60)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit(tk._s==='tasks'?'task':'quickTask',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete(tk._s,tk.id,tk.title)}>🗑️</button></div></div>))}</div>
+<div className="card" style={{padding:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--teal)'}}>✅ {T('المهام','Tasks',language)} <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>({all.filter(t=>t.status==='complete').length}/{all.length})</span></h3><button className="btn btn-teal btn-xs" onClick={()=>onAdd('quickTask',null,null,{dueDate:ts})}>⚡ {T('مهمة','Task',language)}</button></div>{!all.length?(<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>🎉 {T('لا مهام','No tasks',language)}</p>):all.map(tk=>(<div key={tk.id} style={{display:'flex',alignItems:'center',gap:8,padding:'10px 0',borderBottom:'1px solid var(--border)'}}><div onClick={()=>onStatus(tk._s,tk,tk._ns[tk.status])} style={{width:26,height:26,borderRadius:8,border:`2px solid ${sc[tk.status]}`,background:tk.status==='complete'?sc.complete:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0}}>{tk.status==='complete'&&'✓'}</div><span style={{fontSize:18}}>{tk.icon||'✅'}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span>{tk.priority&&<span className="badge" style={{background:`${pc[tk.priority]||'var(--text2)'}22`,color:pc[tk.priority]||'var(--text2)'}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>}{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}{tk.completedAt&&tk.startedAt&&<span className="badge" style={{background:'var(--lime)22',color:'var(--lime)'}}>⏱️ {fmtDuration(tk.startedAt,tk.completedAt,language)}</span>}{tk.startedAt&&!tk.completedAt&&<span className="badge" style={{background:'var(--teal-g)',color:'var(--teal)'}}>▶ {fmtDuration(tk.startedAt,new Date().toISOString(),language)}</span>}{(tk.tags||[]).map(tid=>{const tag=DEF_TAGS.find(t=>t.id===tid);return tag?<span key={tid} className="badge" style={{background:tag.color+'22',color:tag.color}}>{tag.icon}</span>:null;})}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>60?tk.notes.slice(0,60)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit(tk._s==='tasks'?'task':'quickTask',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete(tk._s,tk.id,tk.title)}>🗑️</button></div></div>))}</div>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--gold)'}}>📋 {T('القوائم','Lists',language)}</h3><button className="btn btn-gold btn-xs" onClick={()=>onAdd('taskList')}>⚡ {T('قائمة','List',language)}</button></div>
 {!(data.taskLists||[]).length?(<div className="card" style={{padding:30,textAlign:'center'}}><div style={{fontSize:40,marginBottom:8}}>📝</div><p style={{color:'var(--text2)',fontSize:13}}>{T('أنشئ قائمتك الأولى!','Create your first list!',language)}</p></div>):(data.taskLists||[]).map(list=>(<div key={list.id} className="card" style={{padding:14,borderRight:language==='ar'?`3px solid ${list.color}`:'none',borderLeft:language!=='ar'?`3px solid ${list.color}`:'none'}}><div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}><div style={{fontSize:24,width:40,height:40,display:'flex',alignItems:'center',justifyContent:'center',background:`${list.color}22`,borderRadius:10,flexShrink:0}}>{list.icon}</div><div style={{flex:1}}><div style={{fontWeight:800,fontSize:14}}>{list.name}</div><div style={{fontSize:11,color:'var(--text2)',fontWeight:600}}>{list.items?.length||0} {T('عناصر','items',language)} · {Math.round(lP(list))}%</div></div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('taskList',list)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDeleteList(list)}>🗑️</button></div></div><div style={{height:4,background:'var(--border)',borderRadius:4,marginBottom:10,overflow:'hidden'}}><div style={{height:'100%',width:`${lP(list)}%`,background:`linear-gradient(90deg,${list.color},${list.color}88)`,borderRadius:4,transition:'width .5s'}}/></div>{(list.items||[]).map(it=>(<div key={it.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}><div onClick={()=>tLI(list,it.id)} style={{width:22,height:22,borderRadius:6,border:`2px solid ${it.checked?'var(--lime)':'var(--border)'}`,background:it.checked?'var(--lime)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{it.checked&&'✓'}</div><span style={{flex:1,fontSize:13,fontWeight:500,textDecoration:it.checked?'line-through':'none',opacity:it.checked?.4:1}}>{it.title}</span><button className="btn btn-ghost btn-icon-xs" style={{width:22,height:22,fontSize:10}} onClick={()=>rLI(list,it.id)}>✕</button></div>))}<div style={{display:'flex',gap:8,marginTop:8}}><input className="field" style={{fontSize:13,padding:'8px 12px'}} value={ni[list.id]||''} onChange={e=>setNi({...ni,[list.id]:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')aLI(list,ni[list.id]||'');}} placeholder={T('عنصر جديد...','New item...',language)}/><button className="btn btn-teal btn-sm" onClick={()=>aLI(list,ni[list.id]||'')}>+</button></div></div>))}</div>);}
 
 // ========== EXPENSE SYSTEM ==========
+const DEF_TAGS=[
+  {id:'work',name:'عمل',nameEn:'Work',color:'#5F7FFF',icon:'💼'},
+  {id:'personal',name:'شخصي',nameEn:'Personal',color:'#FF6B6B',icon:'🏠'},
+  {id:'ministry',name:'وزارة',nameEn:'Ministry',color:'#00D2D3',icon:'🏛️'},
+  {id:'zakat',name:'زكاة',nameEn:'Zakat',color:'#2ED573',icon:'🤲'},
+  {id:'study',name:'دراسة',nameEn:'Study',color:'#FECA57',icon:'📖'},
+  {id:'health',name:'صحة',nameEn:'Health',color:'#FF9FF3',icon:'💚'},
+  {id:'family',name:'عائلة',nameEn:'Family',color:'#FF6348',icon:'👨‍👩‍👧‍👦'},
+  {id:'deen',name:'دين',nameEn:'Deen',color:'#1ABC9C',icon:'🕌'},
+];
 const DEF_CATS=[
   {id:'cat-food',name:'أكل ومطاعم',nameEn:'Food & Dining',icon:'🍽️',color:'#FF6B6B'},
   {id:'cat-transport',name:'مواصلات وبنزين',nameEn:'Transport & Gas',icon:'🚗',color:'#5F7FFF'},
@@ -2324,6 +2449,7 @@ function App(){
   const[previewMode,setPreviewMode]=useState('desktop');
   const[search,setSearch]=useState('');
   const[filter,setFilter]=useState('all');
+  const[tagFilter,setTagFilter]=useState('');
   const[installPrompt,setInstallPrompt]=useState(null);
   const[calOpen,setCalOpen]=useState(()=>window.innerWidth>=768);
   const[expFromCal,setExpFromCal]=useState(null);
@@ -2514,7 +2640,7 @@ function App(){
               <div style={{padding:'36px 10px 90px',maxWidth:'100%'}}>
                 <BackupBar language={lang} onExport={handleExport}/>
                 {view!=='timeline'&&view!=='expenses'&&view!=='notes'&&view!=='meetings'&&<div style={{marginBottom:16}}><Cal language={lang} data={data} onDayClick={handleDayClick}/></div>}
-                {view==='dashboard'&&<><StatsBar data={data} language={lang}/><WeeklyChart data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter}/></>}
+                {view==='dashboard'&&<><AnalyticsDashboard data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter} tagFilter={tagFilter} onTagFilter={setTagFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter} tagFilter={tagFilter}/></>}
                 {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList}/>}
                 {view==='meetings'&&<MeetingsPage data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete}/>}
                 {view==='expenses'&&<Expenses data={data} language={lang} onSaveExpense={handleSaveExpense} onDeleteExpense={handleDeleteExpense} onSaveCategory={handleSaveCategory} onDeleteCategory={handleDeleteCategory} onSaveBudget={handleSaveBudget} onDeleteBudget={handleDeleteBudget} toast={toast}/>}
@@ -2537,7 +2663,7 @@ function App(){
                   <div className="cal-inner" style={!calOpen?{display:'none'}:{}}><Cal language={lang} data={data} onDayClick={handleDayClick}/></div>
                 </div>
                 <div>
-                  {view==='dashboard'&&<><StatsBar data={data} language={lang}/><WeeklyChart data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter}/></>}
+                  {view==='dashboard'&&<><AnalyticsDashboard data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter} tagFilter={tagFilter} onTagFilter={setTagFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter} tagFilter={tagFilter}/></>}
                   {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList}/>}
                 </div>
               </div>
