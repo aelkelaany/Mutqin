@@ -1445,9 +1445,10 @@ function CategoryModal({category,language,onSave,onClose}){
 
 function BudgetModal({budget,language,onSave,onClose}){
   const isE=budget&&budget.id&&!budget._isNew;
-  const[form,setForm]=useState(()=>isE?{...budget}:{title:'',icon:'💰',color:'#FECA57',totalAmount:'',currency:'SAR',startDate:localDS(),endDate:'',type:'custom'});
+  const[form,setForm]=useState(()=>isE?{includeInReports:true,...budget}:{title:'',icon:'💰',color:'#FECA57',totalAmount:'',currency:'SAR',startDate:localDS(),endDate:'',type:'custom',includeInReports:true});
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const icons=['💰','🇵🇹','✈️','🏠','🎓','🌙','🚗','💻','🎁','💍','🏕️','🏗️','👶','🎉','📚'];
+  const incl=form.includeInReports!==false;
   return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400}}>
     <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>{isE?T('تعديل ميزانية','Edit Budget',language):T('ميزانية جديدة','New Budget',language)}</h3></div>
     <div style={{padding:20,display:'flex',flexDirection:'column',gap:14}}>
@@ -1455,6 +1456,11 @@ function BudgetModal({budget,language,onSave,onClose}){
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الأيقونة','Icon',language)}</label><IconPick icons={icons} sel={form.icon} onSel={v=>f('icon',v)}/></div>
       <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8}}><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('المبلغ','Amount',language)}</label><input className="field" type="number" value={form.totalAmount} onChange={e=>f('totalAmount',e.target.value)} style={{fontSize:20,fontWeight:900}}/></div><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('العملة','Currency',language)}</label><select className="field" value={form.currency} onChange={e=>f('currency',e.target.value)}>{CURRENCIES.map(c=>(<option key={c.code} value={c.code}>{c.icon} {c.code}</option>))}</select></div></div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('من','From',language)}</label><input className="field" type="date" value={form.startDate} onChange={e=>f('startDate',e.target.value)}/></div><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('إلى','To',language)}</label><input className="field" type="date" value={form.endDate} onChange={e=>f('endDate',e.target.value)}/></div></div>
+      {/* Include in Reports Toggle */}
+      <div onClick={()=>f('includeInReports',!incl)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:12,cursor:'pointer',background:incl?'var(--teal-g)':'var(--bg3)',border:`1px solid ${incl?'var(--teal)':'var(--border)'}`}}>
+        <div style={{width:36,height:20,borderRadius:10,background:incl?'var(--teal)':'var(--border)',position:'relative',transition:'background .2s',flexShrink:0}}><div style={{width:16,height:16,borderRadius:8,background:'white',position:'absolute',top:2,transition:'left .2s',left:incl?'18px':'2px'}}/></div>
+        <div><div style={{fontWeight:700,fontSize:13,color:incl?'var(--teal)':'var(--text2)'}}>{incl?T('📊 تظهر في التقارير والداشبورد','📊 Included in reports & dashboard',language):T('👁️ مخفية من التقارير والداشبورد','👁️ Hidden from reports & dashboard',language)}</div><div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>{T('تحكم في ظهور مصاريفها في الإحصائيات','Control if this budget\'s expenses appear in analytics',language)}</div></div>
+      </div>
       {isE&&<div onClick={()=>f('closed',!form.closed)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:12,cursor:'pointer',background:form.closed?'var(--coral-g)':'var(--lime-g)',border:`1px solid ${form.closed?'var(--coral)':'var(--lime)'}`}}>
         <div style={{width:36,height:20,borderRadius:10,background:form.closed?'var(--coral)':'var(--lime)',position:'relative',transition:'background .2s'}}><div style={{width:16,height:16,borderRadius:8,background:'white',position:'absolute',top:2,transition:'left .2s',left:form.closed?'18px':'2px'}}/></div>
         <span style={{fontWeight:700,fontSize:13,color:form.closed?'var(--coral)':'var(--lime)'}}>{form.closed?T('🔒 مغلقة — المصاريف متوقفة','🔒 Closed — expenses frozen',language):T('🔓 مفتوحة — المصاريف مفعّلة','🔓 Open — expenses active',language)}</span>
@@ -1518,10 +1524,97 @@ function ExpMonthlyBars({expenses,categories,language,toBase}){
   </div>);
 }
 
+// ========== RECURRING TEMPLATES HELPERS ==========
+function getRecurringTemplates(){try{return JSON.parse(localStorage.getItem('mutqin-recurring')||'[]');}catch(e){return[];}}
+function saveRecurringTemplates(list){localStorage.setItem('mutqin-recurring',JSON.stringify(list));}
+
+function RecurringModal({language,categories,onClose,onImport}){
+  const[templates,setTemplates]=useState(()=>getRecurringTemplates());
+  const[editIdx,setEditIdx]=useState(null); // null=list, -1=new, number=edit
+  const blank={title:'',amount:'',currency:'SAR',category:categories[0]?.id||'',priority:'essential',expType:'fixed',paymentMethod:'cash',notes:''};
+  const[form,setForm]=useState(blank);
+  const f=(k,v)=>setForm(p=>({...p,[k]:v}));
+
+  const startNew=()=>{setForm(blank);setEditIdx(-1);};
+  const startEdit=(i)=>{setForm({...templates[i]});setEditIdx(i);};
+  const saveTemplate=()=>{
+    if(!form.title.trim()||!form.amount)return;
+    const t={...form,id:form.id||uid(),amount:parseFloat(form.amount)};
+    let next;
+    if(editIdx===-1)next=[...templates,t];
+    else{next=templates.map((x,i)=>i===editIdx?t:x);}
+    saveRecurringTemplates(next);setTemplates(next);setEditIdx(null);
+  };
+  const delTemplate=(i)=>{const next=templates.filter((_,j)=>j!==i);saveRecurringTemplates(next);setTemplates(next);};
+
+  const pay=[{v:'cash',i:'💵'},{v:'card',i:'💳'},{v:'transfer',i:'🏦'}];
+  const priColors={essential:'var(--coral)',comfort:'var(--gold)',luxury:'var(--lime)'};
+
+  if(editIdx!==null){
+    return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400,maxHeight:'90dvh',overflow:'auto'}}>
+      <div style={{padding:'18px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10}}>
+        <button className="btn btn-ghost btn-icon-xs" onClick={()=>setEditIdx(null)}>←</button>
+        <h3 style={{fontSize:15,fontWeight:800}}>{editIdx===-1?T('قالب جديد','New Template',language):T('تعديل قالب','Edit Template',language)}</h3>
+      </div>
+      <div style={{padding:18,display:'flex',flexDirection:'column',gap:12}}>
+        <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الوصف','Description',language)}</label><input className="field" value={form.title} onChange={e=>f('title',e.target.value)} placeholder={T('إيجار، راتب، نت...','Rent, subscription...',language)}/></div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8}}>
+          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('المبلغ','Amount',language)}</label><input className="field" type="number" step="0.01" value={form.amount} onChange={e=>f('amount',e.target.value)} style={{fontSize:18,fontWeight:900}}/></div>
+          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('العملة','Currency',language)}</label><select className="field" value={form.currency} onChange={e=>f('currency',e.target.value)}>{CURRENCIES.map(c=>(<option key={c.code} value={c.code}>{c.code}</option>))}</select></div>
+        </div>
+        <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('التصنيف','Category',language)}</label><div style={{display:'flex',flexWrap:'wrap',gap:6}}>{categories.map(c=>(<div key={c.id} onClick={()=>f('category',c.id)} style={{padding:'5px 10px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${form.category===c.id?c.color:'var(--border)'}`,background:form.category===c.id?`${c.color}22`:'transparent',color:form.category===c.id?c.color:'var(--text2)'}}>{c.icon} {language==='ar'?c.name:c.nameEn}</div>))}</div></div>
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>🎯 {T('الأولوية','Priority',language)}</label><div style={{display:'flex',gap:4}}>{[{v:'essential',i:'🔴'},{v:'comfort',i:'🟡'},{v:'luxury',i:'🟢'}].map(p=>(<div key={p.v} onClick={()=>f('priority',p.v)} style={{flex:1,padding:'7px 4px',borderRadius:8,fontSize:16,cursor:'pointer',textAlign:'center',border:`2px solid ${form.priority===p.v?priColors[p.v]:'var(--border)'}`,background:form.priority===p.v?`${priColors[p.v]}22`:'transparent'}}>{p.i}</div>))}</div></div>
+          <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('طريقة الدفع','Payment',language)}</label><div style={{display:'flex',gap:4}}>{pay.map(p=>(<div key={p.v} onClick={()=>f('paymentMethod',p.v)} style={{flex:1,padding:'7px 4px',borderRadius:8,fontSize:16,cursor:'pointer',textAlign:'center',border:`2px solid ${form.paymentMethod===p.v?'var(--teal)':'var(--border)'}`,background:form.paymentMethod===p.v?'var(--teal-g)':'transparent'}}>{p.i}</div>))}</div></div>
+        </div>
+        <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('ملاحظات','Notes',language)}</label><input className="field" value={form.notes||''} onChange={e=>f('notes',e.target.value)}/></div>
+      </div>
+      <div style={{padding:'14px 18px',borderTop:'1px solid var(--border)',display:'flex',gap:8,justifyContent:'flex-end'}}>
+        <button className="btn btn-ghost" onClick={()=>setEditIdx(null)}>{T('إلغاء','Cancel',language)}</button>
+        <button className="btn btn-teal" onClick={saveTemplate}>💾 {T('حفظ','Save',language)}</button>
+      </div>
+    </div></div>);
+  }
+
+  return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:420,maxHeight:'90dvh',overflow:'auto'}}>
+    <div style={{padding:'18px 20px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <h3 style={{fontSize:16,fontWeight:800}}>📌 {T('قوالب المصاريف الثابتة','Recurring Expense Templates',language)}</h3>
+      <button className="btn btn-ghost btn-icon-xs" onClick={onClose}>✕</button>
+    </div>
+    <div style={{padding:'14px 16px',background:'var(--gold-g)',borderBottom:'1px solid var(--gold)',display:'flex',gap:8,alignItems:'flex-start'}}>
+      <span style={{fontSize:18}}>💡</span>
+      <span style={{fontSize:12,color:'var(--gold)',fontWeight:600,lineHeight:1.5}}>{T('أضف هنا المصاريف الثابتة الشهرية (إيجار، نت، راتب السائق...) ثم استوردها دفعة واحدة عند بدء كل شهر.','Add your fixed monthly expenses here (rent, internet, subscriptions...) then import them all at the start of each month.',language)}</span>
+    </div>
+    <div style={{padding:'14px 16px',display:'flex',flexDirection:'column',gap:10}}>
+      {!templates.length&&<div style={{textAlign:'center',padding:24,color:'var(--text2)'}}><div style={{fontSize:40}}>📌</div><p style={{fontSize:13,marginTop:8}}>{T('لا يوجد قوالب بعد','No templates yet',language)}</p></div>}
+      {templates.map((t,i)=>{const cat=categories.find(c=>c.id===t.category)||{icon:'💰',color:'var(--teal)'};return(
+        <div key={t.id||i} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+          <div style={{width:36,height:36,borderRadius:10,background:`${cat.color}22`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{cat.icon}</div>
+          <div style={{flex:1,minWidth:0}}>
+            <div style={{fontWeight:700,fontSize:13}}>{t.title}</div>
+            <div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:6,marginTop:2}}>
+              <span style={{fontWeight:800,color:'var(--text)'}}>{t.amount} {t.currency}</span>
+              <span>·</span><span style={{color:priColors[t.priority]||'var(--text2)'}}>{t.priority==='essential'?'🔴':t.priority==='comfort'?'🟡':'🟢'}</span>
+              <span>·</span><span>{t.paymentMethod==='cash'?'💵':t.paymentMethod==='card'?'💳':'🏦'}</span>
+            </div>
+          </div>
+          <button className="btn btn-ghost btn-icon-xs" onClick={()=>startEdit(i)}>✏️</button>
+          <button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>delTemplate(i)}>🗑️</button>
+        </div>
+      );})}
+    </div>
+    <div style={{padding:'14px 16px',borderTop:'1px solid var(--border)',display:'flex',gap:8}}>
+      <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={startNew}>➕ {T('قالب جديد','New Template',language)}</button>
+      {templates.length>0&&<button className="btn btn-coral btn-sm" style={{flex:1}} onClick={()=>{onImport(templates);onClose();}}>📥 {T('استيراد لهذا الشهر','Import This Month',language)}</button>}
+    </div>
+  </div></div>);
+}
+
 function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,onDeleteCategory,onSaveBudget,onDeleteBudget,toast}){
   const[expModal,setExpModal]=useState(null);
   const[catModal,setCatModal]=useState(null);
   const[budModal,setBudModal]=useState(null);
+  const[recurModal,setRecurModal]=useState(false);
   const[chartTab,setChartTab]=useState('pie');
   const[dateRange,setDateRange]=useState('month');
   const[customFrom,setCustomFrom]=useState('');
@@ -1555,7 +1648,10 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
   const allExpRaw=data.expenses||[];
   const budgets=data.budgets||[];
   const closedBudgetIds=useMemo(()=>new Set(budgets.filter(b=>b.closed).map(b=>b.id)),[budgets]);
+  const excludedFromReportIds=useMemo(()=>new Set(budgets.filter(b=>b.includeInReports===false).map(b=>b.id)),[budgets]);
   const allExp=useMemo(()=>allExpRaw.filter(e=>!e.budgetId||!closedBudgetIds.has(e.budgetId)),[allExpRaw,closedBudgetIds]);
+  // analyticsExp: excludes budgets with includeInReports=false (for dashboard/smart analysis)
+  const analyticsExp=useMemo(()=>allExp.filter(e=>!e.budgetId||!excludedFromReportIds.has(e.budgetId)),[allExp,excludedFromReportIds]);
 
   const filtered=useMemo(()=>{
     const now=new Date();let from,to;
@@ -1569,7 +1665,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
 
   const totalFiltered=useMemo(()=>filtered.reduce((s,e)=>s+toBase(e.amount,e.currency),0),[filtered,toBase]);
   const curMonth=localDS().slice(0,7);
-  const monthTotal=useMemo(()=>allExp.filter(e=>e.date.startsWith(curMonth)).reduce((s,e)=>s+toBase(e.amount,e.currency),0),[allExp,curMonth,toBase]);
+  const monthTotal=useMemo(()=>analyticsExp.filter(e=>e.date.startsWith(curMonth)).reduce((s,e)=>s+toBase(e.amount,e.currency),0),[analyticsExp,curMonth,toBase]);
 
   const getCatName=(id)=>{const c=cats.find(c=>c.id===id);return c?(language==='ar'?c.name:c.nameEn):'❓';};
   const getCat=(id)=>cats.find(c=>c.id===id)||{icon:'❓',color:'#666',name:'أخرى',nameEn:'Other'};
@@ -1582,21 +1678,74 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
   const dateRanges=[{id:'week',l:T('أسبوع','Week',language)},{id:'month',l:T('شهر','Month',language)},{id:'year',l:T('سنة','Year',language)},{id:'custom',l:T('مخصص','Custom',language)}];
 
   const handleExportXlsx=()=>{
-    const wsData=[[T('التاريخ','Date',language),T('التصنيف','Category',language),T('الوصف','Description',language),T('المبلغ','Amount',language),T('العملة','Currency',language),T('المبلغ بـ ','Amount in ',language)+baseCur,T('طريقة الدفع','Payment',language),T('ملاحظات','Notes',language)]];
-    filtered.forEach(e=>{const cat=getCat(e.category);wsData.push([e.date,language==='ar'?cat.name:cat.nameEn,e.title,e.amount,e.currency,Math.round(toBase(e.amount,e.currency)*100)/100,e.paymentMethod||'',e.notes||'']);});
-    wsData.push([]);wsData.push(['','',T('الإجمالي','Total',language),'','',Math.round(totalFiltered),'','']);
+    const priLabel={essential:T('ضروري','Essential',language),comfort:T('مريحة','Comfort',language),luxury:T('رفاهية','Luxury',language)};
+    const typeLabel={fixed:T('ثابت','Fixed',language),variable:T('متغير','Variable',language)};
+    const payLabel={cash:T('نقد','Cash',language),card:T('بطاقة','Card',language),transfer:T('تحويل','Transfer',language)};
+    const wsData=[[
+      T('التاريخ','Date',language),
+      T('التصنيف','Category',language),
+      T('الوصف','Description',language),
+      T('المبلغ','Amount',language),
+      T('العملة','Currency',language),
+      T('المبلغ بـ ','Amount in ',language)+baseCur,
+      T('النوع','Type',language),
+      T('الأولوية','Priority',language),
+      T('طريقة الدفع','Payment',language),
+      T('تاريخ الدفعة القادمة','Next Payment Date',language),
+      T('الميزانية','Budget',language),
+      T('ملاحظات','Notes',language)
+    ]];
+    filtered.forEach(e=>{
+      const cat=getCat(e.category);
+      const bud=budgets.find(b=>b.id===e.budgetId);
+      wsData.push([
+        e.date,
+        language==='ar'?cat.name:cat.nameEn,
+        e.title,
+        e.amount,
+        e.currency,
+        Math.round(toBase(e.amount,e.currency)*100)/100,
+        typeLabel[e.expType]||e.expType||'',
+        priLabel[e.priority]||e.priority||'',
+        payLabel[e.paymentMethod]||e.paymentMethod||'',
+        e.nextPaymentDate||'',
+        bud?`${bud.icon} ${bud.title}`:'',
+        e.notes||''
+      ]);
+    });
+    wsData.push([]);wsData.push(['','',T('الإجمالي','Total',language),'','',Math.round(totalFiltered),'','','','','','']);
     const sumData=[[T('التصنيف','Category',language),T('المبلغ بـ ','Amount in ',language)+baseCur,T('النسبة','%',language)]];
     const byC={};filtered.forEach(e=>{byC[e.category]=(byC[e.category]||0)+toBase(e.amount,e.currency);});
     Object.entries(byC).sort((a,b)=>b[1]-a[1]).forEach(([cid,amt])=>{const cat=getCat(cid);sumData.push([language==='ar'?cat.name:cat.nameEn,Math.round(amt),totalFiltered?Math.round(amt/totalFiltered*100)+'%':'0%']);});
     const wb=XLSX.utils.book_new();const ws1=XLSX.utils.aoa_to_sheet(wsData);const ws2=XLSX.utils.aoa_to_sheet(sumData);
+    // Column widths
+    ws1['!cols']=[{wch:12},{wch:16},{wch:28},{wch:10},{wch:8},{wch:14},{wch:10},{wch:10},{wch:10},{wch:18},{wch:18},{wch:24}];
     XLSX.utils.book_append_sheet(wb,ws1,T('المصاريف','Expenses',language));XLSX.utils.book_append_sheet(wb,ws2,T('الملخص','Summary',language));
     XLSX.writeFile(wb,`expenses-${localDS()}.xlsx`);
     toast(T('تم التصدير 📤','Exported 📤',language));
   };
 
+  const handleImportRecurring=useCallback((templates)=>{
+    const today=localDS();
+    const curMonthStr=today.slice(0,7);
+    // Check for existing entries this month with same title to avoid duplicates
+    const existing=allExpRaw.filter(e=>e.date.startsWith(curMonthStr)).map(e=>e.title.trim().toLowerCase());
+    let imported=0;
+    templates.forEach(t=>{
+      if(existing.includes((t.title||'').trim().toLowerCase()))return; // skip duplicates
+      const rates=getStoredRates().rates;
+      const savedRates={};
+      CURRENCIES.forEach(c=>{if(c.code!==t.currency){const fr=rates[t.currency]||1;const tr=rates[c.code]||1;savedRates[c.code]=Math.round((tr/fr)*1000000)/1000000;}});
+      onSaveExpense({...t,id:uid(),date:today,savedRates,savedRateDate:new Date().toISOString(),createdAt:new Date().toISOString(),updatedAt:new Date().toISOString()});
+      imported++;
+    });
+    toast(imported>0?T(`تم استيراد ${imported} مصروف ثابت 📌`,`Imported ${imported} recurring expenses 📌`,language):T('لا جديد — كل القوالب مضافة لهذا الشهر','Nothing new — all templates already added this month',language));
+  },[allExpRaw,onSaveExpense,language,toast]);
+
   return(<div style={{display:'flex',flexDirection:'column',gap:16}}>
     <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2 style={{fontSize:22,fontWeight:900}}>💰 {T('المصاريف','Expenses',language)}</h2><div style={{display:'flex',gap:6}}>
       <button className="btn btn-coral btn-sm" onClick={()=>setExpModal({_isNew:true})}>+ {T('مصروف','Expense',language)}</button>
+      <button className="btn btn-gold btn-sm" title={T('قوالب المصاريف الثابتة','Recurring Templates',language)} onClick={()=>setRecurModal(true)}>📌</button>
       <button className="btn btn-ghost btn-sm" onClick={()=>setMgtMode(!mgtMode)}>{mgtMode?'✕':'⚙️'}</button>
       <button className="btn btn-ghost btn-sm" onClick={handleExportXlsx}>📤 Excel</button>
     </div></div>
@@ -1664,7 +1813,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
         {chartTab==='trend'&&<ExpTrendLine expenses={filtered} language={language} toBase={toBase}/>}
         {chartTab==='bars'&&<ExpMonthlyBars expenses={allExp} categories={cats} language={language} toBase={toBase}/>}
         {chartTab==='table'&&(<div style={{width:'100%',maxHeight:300,overflowY:'auto'}}><table style={{width:'100%',fontSize:12,borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'2px solid var(--border)'}}><th style={{textAlign:'start',padding:6,fontWeight:700}}>{T('التصنيف','Category',language)}</th><th style={{textAlign:'start',padding:6,fontWeight:700}}>{T('المبلغ','Amount',language)} ({baseCur})</th><th style={{textAlign:'start',padding:6,fontWeight:700}}>%</th></tr></thead><tbody>{(()=>{const byC={};filtered.forEach(e=>{byC[e.category]=(byC[e.category]||0)+toBase(e.amount,e.currency);});return Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([cid,amt])=>{const cat=getCat(cid);return(<tr key={cid} style={{borderBottom:'1px solid var(--border)'}}><td style={{padding:6}}>{cat.icon} {language==='ar'?cat.name:cat.nameEn}</td><td style={{padding:6,fontWeight:700}}>{fmtMoney(amt)}</td><td style={{padding:6,color:'var(--text2)'}}>{totalFiltered?Math.round(amt/totalFiltered*100):0}%</td></tr>);});})()}</tbody></table></div>)}
-        {chartTab==='smart'&&<SmartAnalysis expenses={allExp} categories={cats} language={language} toBase={toBase} baseCur={baseCur}/>}
+        {chartTab==='smart'&&<SmartAnalysis expenses={analyticsExp} categories={cats} language={language} toBase={toBase} baseCur={baseCur}/>}
         {chartTab==='budgets'&&(<div style={{width:'100%'}}>{!budgets.length?<p style={{textAlign:'center',color:'var(--text2)',padding:20}}>{T('لا ميزانيات — أضف من ⚙️','No budgets — add from ⚙️',language)}</p>:selBudget?(()=>{
           const b=budgets.find(x=>x.id===selBudget);if(!b)return null;
           const bExps=allExpRaw.filter(e=>e.budgetId===b.id);
@@ -1786,6 +1935,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
     {expModal&&<ExpenseModal expense={expModal} categories={cats} budgets={budgets} language={language} onSave={e=>{onSaveExpense(e);setExpModal(null);}} onClose={()=>setExpModal(null)}/>}
     {catModal&&<CategoryModal category={catModal} language={language} onSave={c=>{onSaveCategory(c);setCatModal(null);}} onClose={()=>setCatModal(null)}/>}
     {budModal&&<BudgetModal budget={budModal} language={language} onSave={b=>{onSaveBudget(b);setBudModal(null);}} onClose={()=>setBudModal(null)}/>}
+    {recurModal&&<RecurringModal language={language} categories={cats} onClose={()=>setRecurModal(false)} onImport={handleImportRecurring}/>}
   </div>);
 }
 
@@ -2585,7 +2735,9 @@ function useNotifications(data,lang){
 }
 
 function App(){
-  const[lang,setLang]=useState('ar');const[view,setView]=useState('today');
+  const[lang,setLangState]=useState(()=>localStorage.getItem('gt-lang')||'ar');
+  const setLang=useCallback((l)=>{setLangState(l);localStorage.setItem('gt-lang',l);},[]);
+  const[view,setView]=useState('today');
   const[data,setData]=useState({goals:[],milestones:[],tasks:[],quickTasks:[],taskLists:[],meetings:[]});
   const[toasts,setToasts]=useState([]);const[modal,setModal]=useState(null);const[confirm,setConfirm]=useState(null);
   const[dayView,setDayView]=useState(null);const[listModal,setListModal]=useState(null);const[uploadModal,setUploadModal]=useState(false);
@@ -2722,9 +2874,40 @@ function App(){
   }, [load, toast, lang]);
 
   // JSON Export/Import
-  const handleExport=useCallback(async()=>{const d={};for(const s of ST)d[s]=await dAll(s);const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`goal-tracker-backup-${localDS()}.json`;a.click();localStorage.setItem('gt-last-export',new Date().toISOString());toast(T('تم تصدير كل البيانات 📤','All data exported 📤',lang));},[lang,toast]);
+  const handleExport=useCallback(async()=>{
+    const d={};
+    for(const s of ST)d[s]=await dAll(s);
+    // Include localStorage settings in backup
+    d._settings={
+      language:lang,
+      theme:localStorage.getItem('gt-theme')||'dark',
+      rates:localStorage.getItem('gt-rates')||null,
+      healthProfile:localStorage.getItem('gt-health-profile')||null,
+      recurringTemplates:localStorage.getItem('mutqin-recurring')||null,
+      notifSettings:localStorage.getItem('gt-notif')||null,
+    };
+    const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(b);
+    a.download=`mutqin-backup-${localDS()}.json`;a.click();
+    localStorage.setItem('gt-last-export',new Date().toISOString());
+    toast(T('تم تصدير كل البيانات 📤','All data exported 📤',lang));
+  },[lang,toast]);
   const handleCalExport=useCallback(()=>{const{content,count}=generateICS(data,lang);if(!count){toast(T('لا توجد مهام بتاريخ للتصدير','No dated tasks to export',lang),'warning');return;}const b=new Blob([content],{type:'text/calendar;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`goal-tracker-${localDS()}.ics`;a.click();toast(T(`تم تصدير ${count} حدث للتقويم 📅`,`Exported ${count} events to calendar 📅`,lang));},[data,lang,toast]);
-  const handleImport=useCallback(()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=async e=>{try{const txt=await e.target.files[0].text(),imp=JSON.parse(txt);const doIt=async()=>{for(const s of ST){await dClr(s);if(imp[s])for(const it of imp[s])await dPut(s,it);}await initCats();await load();toast(T('تم استيراد كل البيانات 📥','All data imported 📥',lang));};if(data.goals.length||data.expenses?.length||data.notes?.length)setConfirm({message:T('سيتم استبدال كل البيانات (أهداف + مصاريف + مفكرة). متابعة؟','Replace ALL data (goals + expenses + notes)?',lang),onOk:async()=>{await doIt();setConfirm(null);}});else await doIt();}catch(e){toast(T('خطأ','Error',lang),'error');}};inp.click();},[data,lang,load,toast]);
+  const handleImport=useCallback(()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=async e=>{try{const txt=await e.target.files[0].text(),imp=JSON.parse(txt);const doIt=async()=>{
+    for(const s of ST){await dClr(s);if(imp[s])for(const it of imp[s])await dPut(s,it);}
+    // Restore localStorage settings if present
+    if(imp._settings){
+      const s=imp._settings;
+      if(s.rates)localStorage.setItem('gt-rates',s.rates);
+      if(s.healthProfile)localStorage.setItem('gt-health-profile',s.healthProfile);
+      if(s.recurringTemplates)localStorage.setItem('mutqin-recurring',s.recurringTemplates);
+      if(s.notifSettings)localStorage.setItem('gt-notif',s.notifSettings);
+      if(s.theme)localStorage.setItem('gt-theme',s.theme);
+      if(s.language){localStorage.setItem('gt-lang',s.language);setLangState(s.language);}
+    }
+    await initCats();await load();
+    toast(T('تم استيراد كل البيانات ✅','All data imported ✅',lang));
+  };if(data.goals.length||data.expenses?.length||data.notes?.length)setConfirm({message:T('سيتم استبدال كل البيانات. متابعة؟','Replace ALL data? This cannot be undone.',lang),onOk:async()=>{await doIt();setConfirm(null);}});else await doIt();}catch(e){toast(T('خطأ في ملف الاستيراد','Invalid backup file',lang),'error');}};inp.click();},[data,lang,load,toast]);
 
   // Expense handlers
   const handleSaveExpense=useCallback(async(e)=>{await dPut('expenses',e);await load();toast(T('تم حفظ المصروف 💰','Expense saved 💰',lang));

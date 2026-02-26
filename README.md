@@ -46,12 +46,19 @@ Deferred meetings show the original date as a reference badge, making it easy to
 Full-featured expense tracker with multi-currency support (SAR, USD, EUR, GBP, EGP, AED, KWD, BHD, QAR, OMR, JOD, TRY). Features include:
 
 - **Budgets** with progress bars, spending limits, and close/freeze capability
-- **Categories** with custom icons and colors
-- **Charts** — pie chart, bar chart by category, and trend line
+- **Categories** with custom icons, colors, and monthly planned budget
+- **Charts** — pie chart, bar chart by category, trend line, smart analysis
 - **Budget Reports** with per-category breakdown and expandable transaction lists
 - **Live Exchange Rates** with manual override option
-- **Excel Export** for filtered expenses with summary sheet
+- **Excel Export** with all fields (type, priority, next payment date, budget name, payment method)
 - **Payment Method** tracking (cash, card, transfer)
+- **Expense Type** — Fixed 🔒 or Variable 🔀
+- **Priority** — Essential 🔴 / Comfort 🟡 / Luxury 🟢
+- **Next Payment Date** — for tracking recurring due dates with 7-day alerts
+
+**Budget: Include in Reports toggle** — Each budget has an `📊 Include in Reports` option. When turned OFF, its expenses are excluded from the Smart Analysis, monthly total card, and dashboard stats — useful for isolating one-time or project budgets from your regular spending view.
+
+**📌 Recurring Fixed Expense Templates** — Tap the `📌` button in the expenses header to manage your fixed monthly expenses (rent, internet, subscriptions, etc.) as templates. Each template stores: description, amount, currency, category, priority, and payment method. At the start of each month, tap **"Import This Month"** to bulk-add all templates as new expense entries for the current date. Duplicate detection prevents re-importing the same title twice in the same month.
 
 Closed budgets freeze their expenses from appearing in search results and summary statistics while preserving historical data for review.
 
@@ -194,9 +201,27 @@ No build tools, no npm install, no environment variables required.
 
 The app shows a warning banner if no backup has been taken in 7+ days.
 
-- **Export**: Settings icon → 💾 Export → saves a `.json` file with all data
+- **Export**: Settings icon → 💾 Export → saves a `.json` file with **all data**
 - **Import**: Settings icon → 📥 Import → select a previously exported `.json` file
-- **Excel Export**: Available per-goal (📤 button) and for filtered expenses
+- **Excel Export**: Available per-goal (📤 button) and for filtered expenses (all fields)
+
+**What the JSON backup includes:**
+
+| Data | Source | Backed Up |
+|------|--------|-----------|
+| Goals, Milestones, Tasks | IndexedDB | ✅ |
+| Quick Tasks, Task Lists | IndexedDB | ✅ |
+| Meetings (incl. status/history) | IndexedDB | ✅ |
+| Expenses (incl. type/priority/next-date) | IndexedDB | ✅ |
+| Categories (incl. planned budget) | IndexedDB | ✅ |
+| Budgets (incl. include-in-reports) | IndexedDB | ✅ |
+| Notes | IndexedDB | ✅ |
+| Health Logs | IndexedDB | ✅ |
+| Health Body Profile | localStorage | ✅ |
+| Exchange Rates + Base Currency | localStorage | ✅ |
+| Recurring Expense Templates | localStorage | ✅ |
+| Notification Settings | localStorage | ✅ |
+| Theme + Language | localStorage | ✅ |
 
 ### Meeting Status Management
 
@@ -288,7 +313,8 @@ Lines 2010-2168  → App shell, routing, settings
 
 | Version | Cache | Changes |
 |---------|-------|---------|
-| gt-v15 | Current | 🔔 Notification system, Health tab restructured (body profile + daily log + charts), new metrics |
+| gt-v16 | Current | 📌 Recurring expense templates, 📊 Budget "include in reports" toggle, 📤 Full-field Excel export (type/priority/next-payment/budget) |
+| gt-v15 | — | 🔔 Notification system, Health tab restructured (body profile + daily log + charts), new metrics |
 | gt-v14 | — | 💚 Health tracker, 🕌 Prayer times, Meeting status (scheduled/cancelled/deferred/done) |
 | gt-v13 | — | Today default tab, budget close feature, delete protection, date pre-fill fix |
 | gt-v12 | — | Light mode refinements, InfoBar removal |
