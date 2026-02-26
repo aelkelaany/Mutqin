@@ -1268,9 +1268,134 @@ function fmtDuration(startedAt,completedAt,lang){
 
 async function initCats(){const existing=await dAll('categories');if(!existing.length){for(const c of DEF_CATS)await dPut('categories',{...c,createdAt:new Date().toISOString()});}}
 
+// ========== SMART ANALYSIS COMPONENT ==========
+function SmartAnalysis({expenses,categories,language,toBase,baseCur}){
+  const now=new Date();
+  const curMonth=now.toISOString().slice(0,7);
+  const curMonthExps=expenses.filter(e=>e.date.startsWith(curMonth));
+  
+  // Priority breakdown
+  const byPriority={essential:0,comfort:0,luxury:0,unset:0};
+  curMonthExps.forEach(e=>{const p=e.priority||'unset';byPriority[p]=(byPriority[p]||0)+toBase(e.amount,e.currency);});
+  const totalMonth=Object.values(byPriority).reduce((a,b)=>a+b,0);
+
+  // Fixed vs Variable
+  const byType={fixed:0,variable:0};
+  curMonthExps.forEach(e=>{const t=e.expType||'variable';byType[t]=(byType[t]||0)+toBase(e.amount,e.currency);});
+  const compressible=byPriority.comfort+byPriority.luxury+byPriority.unset;
+  const nonCompressible=byPriority.essential;
+  const compressiblePct=totalMonth?Math.round(compressible/totalMonth*100):0;
+
+  // Planned vs actual by category
+  const catsWithBudget=categories.filter(c=>c.plannedBudget&&parseFloat(c.plannedBudget)>0);
+  const byCategory={};curMonthExps.forEach(e=>{byCategory[e.category]=(byCategory[e.category]||0)+toBase(e.amount,e.currency);});
+
+  // Efficiency score: lower luxury%, more fixed known, lower overshoot = higher score
+  const luxuryPct=totalMonth?Math.round(byPriority.luxury/totalMonth*100):0;
+  const overshootPct=catsWithBudget.length?Math.round(catsWithBudget.filter(c=>byCategory[c.id]>parseFloat(c.plannedBudget)).length/catsWithBudget.length*100):0;
+  const efficiencyScore=Math.max(0,Math.min(100,100-luxuryPct*0.4-overshootPct*0.4-(compressiblePct*0.2)));
+  const effColor=efficiencyScore>=80?'var(--lime)':efficiencyScore>=50?'var(--gold)':'var(--coral)';
+  const effLabel=efficiencyScore>=80?T('ممتاز 🌟','Excellent 🌟',language):efficiencyScore>=60?T('جيد 👍','Good 👍',language):efficiencyScore>=40?T('متوسط ⚠️','Average ⚠️',language):T('يحتاج تحسين 🔴','Needs Improvement 🔴',language);
+
+  // Upcoming payments (next 7 days)
+  const upcomingPayments=expenses.filter(e=>{if(!e.nextPaymentDate)return false;const d=new Date(e.nextPaymentDate+'T12:00');const diff=(d-now)/(1000*60*60*24);return diff>=-1&&diff<=7;}).sort((a,b)=>new Date(a.nextPaymentDate)-new Date(b.nextPaymentDate));
+
+  // Proactive alerts
+  const alerts=[];
+  if(byPriority.luxury>0&&totalMonth&&byPriority.luxury/totalMonth>0.3)alerts.push({type:'warning',msg:T(`⚠️ ${Math.round(byPriority.luxury/totalMonth*100)}% من مصاريفك الشهرية على الرفاهية`,`⚠️ ${Math.round(byPriority.luxury/totalMonth*100)}% of monthly spending is luxury`,language)});
+  catsWithBudget.forEach(c=>{const actual=byCategory[c.id]||0;const planned=parseFloat(c.plannedBudget);if(actual>planned*1.1)alerts.push({type:'danger',msg:T(`🔴 تجاوزت ميزانية "${c.name}" بنسبة ${Math.round((actual-planned)/planned*100)}%`,`🔴 Exceeded "${c.nameEn}" budget by ${Math.round((actual-planned)/planned*100)}%`,language)});else if(actual>planned*0.85)alerts.push({type:'caution',msg:T(`🟡 قاربت على حد "${c.name}" (${Math.round(actual/planned*100)}% مستهلك)`,`🟡 Close to "${c.nameEn}" limit (${Math.round(actual/planned*100)}% used)`,language)});});
+  upcomingPayments.forEach(e=>{const d=new Date(e.nextPaymentDate+'T12:00');const diff=Math.ceil((d-now)/(1000*60*60*24));alerts.push({type:diff<=1?'danger':'info',msg:T(`📅 دفعة قادمة: "${e.title}" ${diff<=0?'اليوم!':diff===1?'غداً':diff+' أيام'}`,`📅 Upcoming: "${e.title}" ${diff<=0?'today!':diff===1?'tomorrow':diff+' days'}`,language)});});
+
+  const alertColors={danger:'var(--coral)',warning:'var(--gold)',caution:'var(--gold)',info:'var(--teal)'};
+  const alertBg={danger:'var(--coral-g)',warning:'var(--gold-g)',caution:'var(--gold-g)',info:'var(--teal-g)'};
+
+  return(<div style={{display:'flex',flexDirection:'column',gap:14}}>
+    {/* Efficiency Score */}
+    <div style={{display:'flex',alignItems:'center',gap:12,padding:'14px 16px',borderRadius:14,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+      <div style={{width:64,height:64,borderRadius:'50%',border:`4px solid ${effColor}`,display:'flex',flexDirection:'column',alignItems:'center',justifyContent:'center',flexShrink:0}}>
+        <div style={{fontSize:22,fontWeight:900,color:effColor}}>{Math.round(efficiencyScore)}</div>
+        <div style={{fontSize:8,color:'var(--text2)'}}>/100</div>
+      </div>
+      <div><div style={{fontWeight:800,fontSize:14}}>{T('كفاءة الإنفاق','Spending Efficiency',language)}</div><div style={{fontSize:12,color:effColor,fontWeight:700}}>{effLabel}</div><div style={{fontSize:11,color:'var(--text2)',marginTop:2}}>{T('بناءً على الأولويات والميزانية','Based on priorities & budget',language)}</div></div>
+    </div>
+
+    {/* Priority Breakdown */}
+    <div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+      <div style={{fontWeight:800,fontSize:13,marginBottom:10}}>🎯 {T('تحليل الأولويات','Priority Analysis',language)}</div>
+      {[{k:'essential',l:T('ضروري','Essential',language),c:'var(--coral)',i:'🔴'},{k:'comfort',l:T('مريحة','Comfort',language),c:'var(--gold)',i:'🟡'},{k:'luxury',l:T('رفاهية','Luxury',language),c:'var(--lime)',i:'🟢'},{k:'unset',l:T('غير محدد','Unset',language),c:'var(--text2)',i:'⚪'}].map(p=>{const amt=byPriority[p.k]||0;const pct=totalMonth?Math.round(amt/totalMonth*100):0;return amt>0?(<div key={p.k} style={{marginBottom:8}}>
+        <div style={{display:'flex',justifyContent:'space-between',fontSize:12,fontWeight:700,marginBottom:4}}><span>{p.i} {p.l}</span><span style={{color:p.c}}>{fmtMoney(amt)} {baseCur} ({pct}%)</span></div>
+        <div style={{height:6,background:'var(--border)',borderRadius:3,overflow:'hidden'}}><div style={{height:'100%',width:`${pct}%`,background:p.c,borderRadius:3,transition:'width .5s'}}/></div>
+      </div>):null;})}
+    </div>
+
+    {/* Compressible Analysis */}
+    <div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+      <div style={{fontWeight:800,fontSize:13,marginBottom:10}}>🗜️ {T('القابل للضغط','Compressibility',language)}</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <div style={{textAlign:'center',padding:'10px 6px',borderRadius:10,background:'var(--coral-g)',border:'1px solid var(--coral-border,var(--coral))'}}>
+          <div style={{fontSize:18,fontWeight:900,color:'var(--coral)'}}>{fmtMoney(nonCompressible)}</div>
+          <div style={{fontSize:10,fontWeight:700,color:'var(--text2)',marginTop:2}}>🔒 {T('غير قابل للضغط','Non-Compressible',language)}</div>
+        </div>
+        <div style={{textAlign:'center',padding:'10px 6px',borderRadius:10,background:'var(--lime-g)',border:'1px solid var(--lime)'}}>
+          <div style={{fontSize:18,fontWeight:900,color:'var(--lime)'}}>{fmtMoney(compressible)}</div>
+          <div style={{fontSize:10,fontWeight:700,color:'var(--text2)',marginTop:2}}>✂️ {T('قابل للضغط','Compressible',language)} {compressiblePct}%</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Fixed vs Variable */}
+    <div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+      <div style={{fontWeight:800,fontSize:13,marginBottom:10}}>⚙️ {T('ثابت مقابل متغير','Fixed vs Variable',language)}</div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <div style={{textAlign:'center',padding:'10px 6px',borderRadius:10,background:'var(--gold-g)'}}>
+          <div style={{fontSize:18,fontWeight:900,color:'var(--gold)'}}>{fmtMoney(byType.fixed)}</div>
+          <div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>🔒 {T('ثابت','Fixed',language)}</div>
+        </div>
+        <div style={{textAlign:'center',padding:'10px 6px',borderRadius:10,background:'var(--electric-g)'}}>
+          <div style={{fontSize:18,fontWeight:900,color:'var(--electric)'}}>{fmtMoney(byType.variable)}</div>
+          <div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>🔀 {T('متغير','Variable',language)}</div>
+        </div>
+      </div>
+    </div>
+
+    {/* Planned vs Actual */}
+    {catsWithBudget.length>0&&(<div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+      <div style={{fontWeight:800,fontSize:13,marginBottom:10}}>📊 {T('المخطط مقابل الفعلي','Planned vs Actual',language)}</div>
+      {catsWithBudget.map(c=>{const actual=byCategory[c.id]||0;const planned=parseFloat(c.plannedBudget);const pct=Math.min(actual/planned*100,100);const over=actual>planned;return(<div key={c.id} style={{marginBottom:10}}>
+        <div style={{display:'flex',justifyContent:'space-between',fontSize:12,marginBottom:4}}>
+          <span style={{fontWeight:700}}>{c.icon} {language==='ar'?c.name:c.nameEn}</span>
+          <span style={{fontWeight:800,color:over?'var(--coral)':'var(--text2)'}}>{fmtMoney(actual)} / {fmtMoney(planned)} {baseCur} {over?'⚠️':''}</span>
+        </div>
+        <div style={{height:8,background:'var(--border)',borderRadius:4,overflow:'hidden'}}><div style={{height:'100%',width:`${pct}%`,background:over?'linear-gradient(90deg,var(--gold),var(--coral))':pct>80?'var(--gold)':'var(--lime)',borderRadius:4,transition:'width .5s'}}/></div>
+      </div>);})}
+    </div>)}
+
+    {/* Upcoming Payments */}
+    {upcomingPayments.length>0&&(<div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+      <div style={{fontWeight:800,fontSize:13,marginBottom:10}}>📅 {T('الدفعات القادمة (7 أيام)','Upcoming Payments (7 days)',language)}</div>
+      {upcomingPayments.map(e=>{const d=new Date(e.nextPaymentDate+'T12:00');const diff=Math.ceil((d-now)/(1000*60*60*24));const cat=categories.find(c=>c.id===e.category)||{icon:'💰',color:'var(--teal)'};return(<div key={e.id} style={{display:'flex',alignItems:'center',gap:10,padding:'8px 0',borderBottom:'1px solid var(--border)'}}>
+        <span style={{fontSize:20}}>{cat.icon}</span>
+        <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>{e.title}</div><div style={{fontSize:11,color:'var(--text2)'}}>📅 {d.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'short',day:'numeric',month:'short'})}</div></div>
+        <div style={{textAlign:'end'}}>
+          <div style={{fontWeight:900,fontSize:14,color:cat.color}}>{e.amount.toFixed(0)} {e.currency}</div>
+          <div style={{fontSize:10,padding:'2px 6px',borderRadius:5,fontWeight:700,background:diff<=0?'var(--coral-g)':diff<=2?'var(--gold-g)':'var(--teal-g)',color:diff<=0?'var(--coral)':diff<=2?'var(--gold)':'var(--teal)'}}>{diff<=0?T('اليوم!','Today!',language):diff===1?T('غداً','Tomorrow',language):diff+T(' أيام',' days',language)}</div>
+        </div>
+      </div>);})}
+    </div>)}
+
+    {/* Proactive Alerts */}
+    {alerts.length>0&&(<div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+      <div style={{fontWeight:800,fontSize:13,marginBottom:10}}>🔔 {T('تنبيهات استباقية','Proactive Alerts',language)}</div>
+      {alerts.map((a,i)=>(<div key={i} style={{padding:'8px 12px',borderRadius:8,marginBottom:6,background:alertBg[a.type],borderRight:language==='ar'?`3px solid ${alertColors[a.type]}`:'none',borderLeft:language!=='ar'?`3px solid ${alertColors[a.type]}`:'none',fontSize:12,fontWeight:600,color:alertColors[a.type]}}>{a.msg}</div>))}
+    </div>)}
+
+    {!totalMonth&&<div style={{textAlign:'center',padding:30,color:'var(--text2)'}}><div style={{fontSize:48}}>🧠</div><p style={{fontSize:13,marginTop:8}}>{T('أضف مصاريف هذا الشهر لرؤية التحليل','Add this month\'s expenses to see analysis',language)}</p></div>}
+  </div>);
+}
+
 function ExpenseModal({expense,categories,budgets,language,onSave,onClose}){
   const isE=expense&&expense.id&&!expense._isNew;
-  const[form,setForm]=useState(()=>isE?{...expense}:{title:'',amount:'',currency:expense?.currency||'SAR',category:categories[0]?.id||'',date:expense?.date||localDS(),notes:'',budgetId:expense?.budgetId||'',paymentMethod:'cash'});
+  const[form,setForm]=useState(()=>isE?{...expense}:{title:'',amount:'',currency:expense?.currency||'SAR',category:categories[0]?.id||'',date:expense?.date||localDS(),notes:'',budgetId:expense?.budgetId||'',paymentMethod:'cash',expType:'variable',priority:'essential',nextPaymentDate:''});
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const save=()=>{if(!form.title.trim()||!form.amount){return;}
     // Store exchange rate at time of saving for accurate historical tracking
@@ -1288,6 +1413,11 @@ function ExpenseModal({expense,categories,budgets,language,onSave,onClose}){
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('التصنيف','Category',language)}</label><div style={{display:'flex',flexWrap:'wrap',gap:6}}>{categories.map(c=>(<div key={c.id} onClick={()=>f('category',c.id)} style={{padding:'6px 12px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${form.category===c.id?c.color:'var(--border)'}`,background:form.category===c.id?`${c.color}22`:'transparent',color:form.category===c.id?c.color:'var(--text2)',transition:'all .15s'}}>{c.icon} {language==='ar'?c.name:c.nameEn}</div>))}</div></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('التاريخ','Date',language)}</label><input className="field" type="date" value={form.date} onChange={e=>f('date',e.target.value)}/></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('طريقة الدفع','Payment',language)}</label><div style={{display:'flex',gap:6}}>{pay.map(p=>(<div key={p.v} onClick={()=>f('paymentMethod',p.v)} style={{flex:1,padding:'8px 6px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'center',border:`2px solid ${form.paymentMethod===p.v?'var(--teal)':'var(--border)'}`,background:form.paymentMethod===p.v?'var(--teal-g)':'transparent',color:form.paymentMethod===p.v?'var(--teal)':'var(--text2)'}}>{p.i} {p.l}</div>))}</div></div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+        <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>⚙️ {T('النوع','Type',language)}</label><div style={{display:'flex',gap:6}}>{[{v:'fixed',l:T('ثابت','Fixed',language),i:'🔒',c:'var(--gold)'},{v:'variable',l:T('متغير','Variable',language),i:'🔀',c:'var(--electric)'}].map(p=>(<div key={p.v} onClick={()=>f('expType',p.v)} style={{flex:1,padding:'8px 6px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'center',border:`2px solid ${form.expType===p.v?p.c:'var(--border)'}`,background:form.expType===p.v?`${p.c}22`:'transparent',color:form.expType===p.v?p.c:'var(--text2)'}}>{p.i} {p.l}</div>))}</div></div>
+        <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>🎯 {T('الأولوية','Priority',language)}</label><div style={{display:'flex',gap:4}}>{[{v:'essential',l:T('ضروري','Essential',language),i:'🔴',c:'var(--coral)'},{v:'comfort',l:T('مريحة','Comfort',language),i:'🟡',c:'var(--gold)'},{v:'luxury',l:T('رفاهية','Luxury',language),i:'🟢',c:'var(--lime)'}].map(p=>(<div key={p.v} onClick={()=>f('priority',p.v)} style={{flex:1,padding:'6px 4px',borderRadius:8,fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'center',border:`2px solid ${form.priority===p.v?p.c:'var(--border)'}`,background:form.priority===p.v?`${p.c}22`:'transparent',color:form.priority===p.v?p.c:'var(--text2)'}}>{p.i}<div style={{fontSize:9,marginTop:2}}>{p.l}</div></div>))}</div></div>
+      </div>
+      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>📅 {T('تاريخ الدفعة القادمة','Next Payment Date',language)}</label><input className="field" type="date" value={form.nextPaymentDate||''} onChange={e=>f('nextPaymentDate',e.target.value)} placeholder={T('اختياري','Optional',language)}/></div>
       {budgets.length>0&&<div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('ميزانية (اختياري)','Budget (optional)',language)}</label><select className="field" value={form.budgetId||''} onChange={e=>f('budgetId',e.target.value)}><option value="">{T('— بدون —','— None —',language)}</option>{budgets.filter(b=>!b.closed).map(b=>(<option key={b.id} value={b.id}>{b.icon} {b.title}</option>))}</select></div>}
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('ملاحظات','Notes',language)}</label><textarea className="field" rows={2} value={form.notes} onChange={e=>f('notes',e.target.value)}/></div>
     </div>
@@ -1297,7 +1427,7 @@ function ExpenseModal({expense,categories,budgets,language,onSave,onClose}){
 
 function CategoryModal({category,language,onSave,onClose}){
   const isE=category&&category.id&&!category._isNew;
-  const[form,setForm]=useState(()=>isE?{...category}:{name:'',nameEn:'',icon:'🏷️',color:'#FF6B6B'});
+  const[form,setForm]=useState(()=>isE?{...category}:{name:'',nameEn:'',icon:'🏷️',color:'#FF6B6B',plannedBudget:''});
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const icons=['🏷️','🍕','☕','🍔','🥗','🧁','🍽️','🍺','🥤','🎮','⛽','💻','📱','🎁','✈️','🐱','🐕','🏋️','🎵','📦','🎬','🌙','🕌','📿','🎒','🏕️','⚽','🎂','👕','👗','💇','🧹','🔧','🏥','💊','🚗','🚕','🚌','⛽','🏠','💡','📞','💧','🔌','🎓','📚','📝','💼','👶','💍','🧴','🧼','🍼','🛏️','🪑','📺','🖨️','🎨','🏖️','⛷️','🎣','🏊','🎭','🎪','🎟️','🛍️','💎','⌚','👓','🧳','🛒','🏦','💳','📮','🛠️','🔑','🏗️','🌿','🐈','🐾','🎶','🍷','🧀','🥩','🍰','🎤','📸','🏡','🚿','🧲','🔋','📡','🖥️','⚡'];
   return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:380}}>
@@ -1307,6 +1437,7 @@ function CategoryModal({category,language,onSave,onClose}){
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الاسم بالإنجليزي','English Name',language)}</label><input className="field" value={form.nameEn} onChange={e=>f('nameEn',e.target.value)}/></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الأيقونة','Icon',language)}</label><IconPick icons={icons} sel={form.icon} onSel={v=>f('icon',v)}/></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('اللون','Color',language)}</label><ColPick sel={form.color} onSel={v=>f('color',v)}/></div>
+      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>📊 {T('الميزانية الشهرية المخططة','Monthly Planned Budget',language)}</label><input className="field" type="number" step="1" value={form.plannedBudget||''} onChange={e=>f('plannedBudget',e.target.value)} placeholder={T('0 = بلا قيد','0 = No limit',language)}/></div>
     </div>
     <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}><button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button><button className="btn btn-teal" onClick={()=>{if(!form.name.trim())return;onSave({...form,id:form.id||uid(),createdAt:form.createdAt||new Date().toISOString()});}}>✅ {T('حفظ','Save',language)}</button></div>
   </div></div>);
@@ -1447,7 +1578,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
   // Group by date
   const grouped=useMemo(()=>{const g={};filtered.forEach(e=>{const d=e.date;if(!g[d])g[d]=[];g[d].push(e);});return Object.entries(g);},[filtered]);
 
-  const chartTabs=[{id:'pie',icon:'🥧',l:T('دائري','Pie',language)},{id:'trend',icon:'📈',l:T('خطي','Trend',language)},{id:'bars',icon:'📊',l:T('شهري','Monthly',language)},{id:'table',icon:'📋',l:T('جدول','Table',language)},{id:'budgets',icon:'🎯',l:T('ميزانيات','Budgets',language)}];
+  const chartTabs=[{id:'pie',icon:'🥧',l:T('دائري','Pie',language)},{id:'trend',icon:'📈',l:T('خطي','Trend',language)},{id:'bars',icon:'📊',l:T('شهري','Monthly',language)},{id:'table',icon:'📋',l:T('جدول','Table',language)},{id:'budgets',icon:'🎯',l:T('ميزانيات','Budgets',language)},{id:'smart',icon:'🧠',l:T('تحليل','Analysis',language)}];
   const dateRanges=[{id:'week',l:T('أسبوع','Week',language)},{id:'month',l:T('شهر','Month',language)},{id:'year',l:T('سنة','Year',language)},{id:'custom',l:T('مخصص','Custom',language)}];
 
   const handleExportXlsx=()=>{
@@ -1469,6 +1600,20 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
       <button className="btn btn-ghost btn-sm" onClick={()=>setMgtMode(!mgtMode)}>{mgtMode?'✕':'⚙️'}</button>
       <button className="btn btn-ghost btn-sm" onClick={handleExportXlsx}>📤 Excel</button>
     </div></div>
+    {(()=>{
+      const now=new Date();
+      const upcomingToday=allExp.filter(e=>e.nextPaymentDate&&new Date(e.nextPaymentDate+'T12:00').toDateString()===now.toDateString());
+      const upcomingSoon=allExp.filter(e=>{if(!e.nextPaymentDate)return false;const d=new Date(e.nextPaymentDate+'T12:00');const diff=(d-now)/(1000*60*60*24);return diff>=0&&diff<=2;});
+      const curM=now.toISOString().slice(0,7);
+      const catsWithBudget=(cats||[]).filter(c=>c.plannedBudget&&parseFloat(c.plannedBudget)>0);
+      const byCategory={};allExp.filter(e=>e.date.startsWith(curM)).forEach(e=>{byCategory[e.category]=(byCategory[e.category]||0)+toBase(e.amount,e.currency);});
+      const overBudget=catsWithBudget.filter(c=>(byCategory[c.id]||0)>parseFloat(c.plannedBudget)*1.05);
+      if(!upcomingToday.length&&!overBudget.length)return null;
+      return(<div style={{display:'flex',flexDirection:'column',gap:6}}>
+        {upcomingToday.map(e=>(<div key={e.id} style={{padding:'10px 14px',borderRadius:10,background:'var(--coral-g)',border:'1px solid var(--coral)',fontSize:12,fontWeight:700,color:'var(--coral)',display:'flex',alignItems:'center',gap:8}}>⏰ {T(`تذكير: دفعة "${e.title}" مستحقة اليوم — ${e.amount} ${e.currency}`,`Reminder: "${e.title}" payment due today — ${e.amount} ${e.currency}`,language)}</div>))}
+        {overBudget.map(c=>(<div key={c.id} style={{padding:'10px 14px',borderRadius:10,background:'var(--gold-g)',border:'1px solid var(--gold)',fontSize:12,fontWeight:700,color:'var(--gold)',display:'flex',alignItems:'center',gap:8}}>🔴 {T(`تجاوزت ميزانية "${c.name}"`,`Exceeded "${c.nameEn}" budget`,language)}</div>))}
+      </div>);
+    })()}
 
     {mgtMode&&<div className="card" style={{padding:14}}>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}><h3 style={{fontSize:14,fontWeight:800}}>🏷️ {T('التصنيفات','Categories',language)}</h3><button className="btn btn-teal btn-xs" onClick={()=>setCatModal({_isNew:true})}>+ {T('جديد','New',language)}</button></div>
@@ -1519,6 +1664,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
         {chartTab==='trend'&&<ExpTrendLine expenses={filtered} language={language} toBase={toBase}/>}
         {chartTab==='bars'&&<ExpMonthlyBars expenses={allExp} categories={cats} language={language} toBase={toBase}/>}
         {chartTab==='table'&&(<div style={{width:'100%',maxHeight:300,overflowY:'auto'}}><table style={{width:'100%',fontSize:12,borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'2px solid var(--border)'}}><th style={{textAlign:'start',padding:6,fontWeight:700}}>{T('التصنيف','Category',language)}</th><th style={{textAlign:'start',padding:6,fontWeight:700}}>{T('المبلغ','Amount',language)} ({baseCur})</th><th style={{textAlign:'start',padding:6,fontWeight:700}}>%</th></tr></thead><tbody>{(()=>{const byC={};filtered.forEach(e=>{byC[e.category]=(byC[e.category]||0)+toBase(e.amount,e.currency);});return Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([cid,amt])=>{const cat=getCat(cid);return(<tr key={cid} style={{borderBottom:'1px solid var(--border)'}}><td style={{padding:6}}>{cat.icon} {language==='ar'?cat.name:cat.nameEn}</td><td style={{padding:6,fontWeight:700}}>{fmtMoney(amt)}</td><td style={{padding:6,color:'var(--text2)'}}>{totalFiltered?Math.round(amt/totalFiltered*100):0}%</td></tr>);});})()}</tbody></table></div>)}
+        {chartTab==='smart'&&<SmartAnalysis expenses={allExp} categories={cats} language={language} toBase={toBase} baseCur={baseCur}/>}
         {chartTab==='budgets'&&(<div style={{width:'100%'}}>{!budgets.length?<p style={{textAlign:'center',color:'var(--text2)',padding:20}}>{T('لا ميزانيات — أضف من ⚙️','No budgets — add from ⚙️',language)}</p>:selBudget?(()=>{
           const b=budgets.find(x=>x.id===selBudget);if(!b)return null;
           const bExps=allExpRaw.filter(e=>e.budgetId===b.id);
@@ -1630,7 +1776,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
         <div className="exp-date-group">{new Date(date+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'long',day:'numeric',month:'short'})} — {fmtMoney(exps.reduce((s,e)=>s+toBase(e.amount,e.currency),0))} {baseCur}</div>
         {exps.map(e=>{const cat=getCat(e.category);return(<div key={e.id} className="exp-item">
           <div className="exp-cat-dot" style={{background:`${cat.color}22`}}>{cat.icon}</div>
-          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14}}>{e.title}</div><div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:6}}><span>{language==='ar'?cat.name:cat.nameEn}</span>{e.paymentMethod&&<span>· {e.paymentMethod==='cash'?'💵':e.paymentMethod==='card'?'💳':'🏦'}</span>}{e.notes&&<span>· 📝</span>}</div></div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14}}>{e.title}</div><div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:6,flexWrap:'wrap'}}><span>{language==='ar'?cat.name:cat.nameEn}</span>{e.paymentMethod&&<span>· {e.paymentMethod==='cash'?'💵':e.paymentMethod==='card'?'💳':'🏦'}</span>}{e.expType&&<span style={{padding:'1px 6px',borderRadius:5,fontWeight:700,background:e.expType==='fixed'?'var(--gold-g)':'var(--electric-g)',color:e.expType==='fixed'?'var(--gold)':'var(--electric)'}}>{e.expType==='fixed'?'🔒':'🔀'}{T(e.expType==='fixed'?' ثابت':' متغير',e.expType==='fixed'?' Fixed':' Var',language)}</span>}{e.priority&&<span style={{padding:'1px 6px',borderRadius:5,fontWeight:700,background:e.priority==='essential'?'var(--coral-g)':e.priority==='comfort'?'var(--gold-g)':'var(--lime-g)',color:e.priority==='essential'?'var(--coral)':e.priority==='comfort'?'var(--gold)':'var(--lime)'}}>{e.priority==='essential'?'🔴':e.priority==='comfort'?'🟡':'🟢'}</span>}{e.nextPaymentDate&&<span style={{color:'var(--teal)'}}>📅 {new Date(e.nextPaymentDate+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'short',day:'numeric'})}</span>}{e.notes&&<span>· 📝</span>}</div></div>
           <div style={{textAlign:'end'}}><div className="exp-amount" style={{color:cat.color}}>{e.amount.toFixed(e.amount%1?2:0)}</div><div style={{fontSize:10,color:'var(--text2)'}}>{CURRENCIES.find(c=>c.code===e.currency)?.icon} {e.currency}{e.currency!==baseCur&&<span style={{opacity:.6}}> ≈ {fmtMoney(toBase(e.amount,e.currency))} {baseCur}</span>}</div></div>
           <div style={{display:'flex',flexDirection:'column',gap:2}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>setExpModal(e)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDeleteExpense(e)}>🗑️</button></div>
         </div>);})}
