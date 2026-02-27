@@ -106,6 +106,7 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .btn{border:none;border-radius:14px;padding:10px 20px;cursor:pointer;font-weight:700;font-family:inherit;font-size:14px;transition:all .25s cubic-bezier(.4,0,.2,1);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .btn:active{transform:scale(.96)}
 .btn-coral{background:linear-gradient(135deg,#FF6B6B,#EE5A24);color:#fff;box-shadow:0 4px 15px var(--coral-g)}
+.btn-lime{background:linear-gradient(135deg,#55E6C1,#00B894);color:#fff;box-shadow:0 4px 15px var(--lime-g)}
 .btn-teal{background:linear-gradient(135deg,#00D2D3,#01A3A4);color:#0B0E17;box-shadow:0 4px 15px var(--teal-g)}
 .btn-gold{background:linear-gradient(135deg,#FECA57,#F6B93B);color:#0B0E17;box-shadow:0 4px 15px var(--gold-g)}
 .btn-pink{background:linear-gradient(135deg,#FF9FF3,#F368E0);color:#0B0E17;box-shadow:0 4px 15px var(--pink-g)}
@@ -559,33 +560,37 @@ function AnalyticsDashboard({data,language}){
 // ========== POMODORO ==========
 function Pomodoro({language}){
   const[open,setOpen]=useState(false);
-  const[mode,setMode]=useState('work'); // work, break, longBreak
+  const[mode,setMode]=useState('work');
   const DURATIONS={work:25*60,break:5*60,longBreak:15*60};
   const[timeLeft,setTimeLeft]=useState(DURATIONS.work);
   const[running,setRunning]=useState(false);
   const[sessions,setSessions]=useState(0);
   const intRef=React.useRef(null);
+  const endTimeRef=React.useRef(null);
+
+  const playBell=()=>{try{const ac=new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator();const g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;o.type='sine';g.gain.setValueAtTime(0.3,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.01,ac.currentTime+0.8);o.start(ac.currentTime);o.stop(ac.currentTime+0.8);setTimeout(()=>{try{const ac2=new(window.AudioContext||window.webkitAudioContext)();const o2=ac2.createOscillator();const g2=ac2.createGain();o2.connect(g2);g2.connect(ac2.destination);o2.frequency.value=1100;o2.type='sine';g2.gain.setValueAtTime(0.3,ac2.currentTime);g2.gain.exponentialRampToValueAtTime(0.01,ac2.currentTime+0.5);o2.start(ac2.currentTime);o2.stop(ac2.currentTime+0.5);}catch(e){}},300);}catch(e){}};
 
   useEffect(()=>{
-    if(running){
-      intRef.current=setInterval(()=>{
-        setTimeLeft(p=>{
-          if(p<=1){
-            clearInterval(intRef.current);setRunning(false);
-            try{const ac=new(window.AudioContext||window.webkitAudioContext)();const o=ac.createOscillator();const g=ac.createGain();o.connect(g);g.connect(ac.destination);o.frequency.value=880;o.type='sine';g.gain.setValueAtTime(0.3,ac.currentTime);g.gain.exponentialRampToValueAtTime(0.01,ac.currentTime+0.8);o.start(ac.currentTime);o.stop(ac.currentTime+0.8);setTimeout(()=>{const o2=ac.createOscillator();const g2=ac.createGain();o2.connect(g2);g2.connect(ac.destination);o2.frequency.value=1100;o2.type='sine';g2.gain.setValueAtTime(0.3,ac.currentTime);g2.gain.exponentialRampToValueAtTime(0.01,ac.currentTime+0.5);o2.start(ac.currentTime);o2.stop(ac.currentTime+0.5);},300);}catch(e){}
-            if(mode==='work'){const ns=sessions+1;setSessions(ns);setMode(ns%4===0?'longBreak':'break');setTimeLeft(ns%4===0?DURATIONS.longBreak:DURATIONS.break);}
-            else{setMode('work');setTimeLeft(DURATIONS.work);}
-            return 0;
-          }
-          return p-1;
-        });
-      },1000);
-    }
-    return()=>clearInterval(intRef.current);
+    if(!running){clearInterval(intRef.current);return;}
+    if(!endTimeRef.current) endTimeRef.current=Date.now()+timeLeft*1000;
+    const tick=()=>{
+      const remaining=Math.round((endTimeRef.current-Date.now())/1000);
+      if(remaining<=0){
+        clearInterval(intRef.current);
+        playBell();
+        if(mode==='work'){const ns=sessions+1;setSessions(ns);const nm=ns%4===0?'longBreak':'break';setMode(nm);setTimeLeft(DURATIONS[nm]);endTimeRef.current=null;}
+        else{setMode('work');setTimeLeft(DURATIONS.work);endTimeRef.current=null;}
+        setRunning(false);
+      } else {setTimeLeft(remaining);}
+    };
+    intRef.current=setInterval(tick,500);
+    const onVisible=()=>{if(document.visibilityState==='visible'&&endTimeRef.current)tick();};
+    document.addEventListener('visibilitychange',onVisible);
+    return()=>{clearInterval(intRef.current);document.removeEventListener('visibilitychange',onVisible);};
   },[running,mode,sessions]);
 
-  const reset=()=>{setRunning(false);setMode('work');setTimeLeft(DURATIONS.work);setSessions(0);};
-  const switchMode=(m)=>{setRunning(false);setMode(m);setTimeLeft(DURATIONS[m]);};
+  const reset=()=>{setRunning(false);setMode('work');setTimeLeft(DURATIONS.work);setSessions(0);endTimeRef.current=null;};
+  const switchMode=(m)=>{setRunning(false);setMode(m);setTimeLeft(DURATIONS[m]);endTimeRef.current=null;};
   const min=Math.floor(timeLeft/60),sec=timeLeft%60;
   const pct=timeLeft/DURATIONS[mode];
   const r=62,c=2*Math.PI*r;
@@ -1075,6 +1080,39 @@ return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{
 )}/></div>)}</div>))}</div>);}
 
 // ========== MEETINGS PAGE ==========
+function relativeTime(dateStr, language){
+  if(!dateStr) return '';
+  const now = new Date();
+  const dt = new Date(dateStr);
+  const diffMs = dt - now;
+  const isAr = language === 'ar';
+  const absMs = Math.abs(diffMs);
+  const absM = Math.floor(absMs / 60000);
+  const absH = Math.floor(absMs / 3600000);
+  // Use calendar-day difference for "yesterday/tomorrow" accuracy
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const dtMidnight = new Date(dt.getFullYear(), dt.getMonth(), dt.getDate());
+  const calDays = Math.round((dtMidnight - todayMidnight) / 86400000);
+
+  if(diffMs > 0){
+    if(absM < 1)  return isAr ? 'الآن' : 'Now';
+    if(absM < 60) return isAr ? `بعد ${absM} دقيقة` : `in ${absM}m`;
+    if(absH < 24) return isAr ? `بعد ${absH} ساعة` : `in ${absH}h`;
+    if(calDays === 1) return isAr ? 'غداً' : 'Tomorrow';
+    if(calDays < 7) return isAr ? `بعد ${calDays} أيام` : `in ${calDays} days`;
+    return isAr ? `بعد ${Math.round(calDays/7)} أسابيع` : `in ${Math.round(calDays/7)}w`;
+  } else {
+    if(absM < 1)  return isAr ? 'الآن' : 'Now';
+    if(absM < 60) return isAr ? `منذ ${absM} دقيقة` : `${absM}m ago`;
+    if(absH < 24) return isAr ? `منذ ${absH} ساعة` : `${absH}h ago`;
+    if(calDays === -1) return isAr ? 'أمس' : 'Yesterday';
+    const absCal = Math.abs(calDays);
+    if(absCal < 7) return isAr ? `منذ ${absCal} أيام` : `${absCal}d ago`;
+    if(absCal < 30) return isAr ? `منذ ${Math.round(absCal/7)} أسابيع` : `${Math.round(absCal/7)}w ago`;
+    return isAr ? `منذ ${Math.round(absCal/30)} أشهر` : `${Math.round(absCal/30)}mo ago`;
+  }
+}
+
 function MeetingsPage({data,language,onAdd,onEdit,onDelete}){
   const[mSearch,setMSearch]=useState('');
   const[expanded,setExpanded]=useState(null);
@@ -1131,6 +1169,12 @@ function MeetingsPage({data,language,onAdd,onEdit,onDelete}){
           <div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:6,flexWrap:'wrap',marginTop:3}}>
             <span>📅 {mDate.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',weekday:'short'})}</span>
             <span>🕐 {mDate.toLocaleTimeString(language==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'})}</span>
+            {!isCancelled&&(()=>{
+              const isDone=m.meetingStatus==='done';
+              const bg=isDone?'var(--bg3)':isPast?'var(--coral-g)':'var(--teal-g)';
+              const cl=isDone?'var(--text2)':isPast?'var(--coral)':'var(--teal)';
+              return<span style={{padding:'1px 7px',borderRadius:6,fontWeight:700,background:bg,color:cl,fontSize:10}}>⏱️ {relativeTime(m.meetingDate,language)}</span>;
+            })()}
             {m.location&&<span>📍 {m.location}</span>}
             {m.attendees&&<span>👤 {m.attendees}</span>}
           </div>
@@ -1393,53 +1437,122 @@ function SmartAnalysis({expenses,categories,language,toBase,baseCur}){
   </div>);
 }
 
+// Default income categories (added to DB on first use)
+const DEFAULT_INCOME_CATS=[
+  {id:'inc-salary',name:'راتب',nameEn:'Salary',icon:'💼',color:'#22c55e',catType:'income'},
+  {id:'inc-cashback',name:'كاش باك',nameEn:'Cashback',icon:'💰',color:'#f5c842',catType:'income'},
+  {id:'inc-transfer',name:'تحويل وارد',nameEn:'Transfer In',icon:'🏦',color:'#3b82f6',catType:'income'},
+  {id:'inc-freelance',name:'عمل حر',nameEn:'Freelance',icon:'🤝',color:'#8b5cf6',catType:'income'},
+  {id:'inc-gift',name:'هدية',nameEn:'Gift',icon:'🎁',color:'#ec4899',catType:'income'},
+  {id:'inc-other',name:'إيراد أخرى',nameEn:'Other Income',icon:'📥',color:'#14b8a6',catType:'income'},
+];
+
 function ExpenseModal({expense,categories,budgets,language,onSave,onClose}){
   const isE=expense&&expense.id&&!expense._isNew;
-  const[form,setForm]=useState(()=>isE?{...expense}:{title:'',amount:'',currency:expense?.currency||'SAR',category:categories[0]?.id||'',date:expense?.date||localDS(),notes:'',budgetId:expense?.budgetId||'',paymentMethod:'cash',expType:'variable',priority:'essential',nextPaymentDate:''});
+  // Detect initial txType from expense data or prop
+  const initTxType=expense?._txType||expense?.txType||'expense';
+  const[txType,setTxType]=useState(initTxType);
+  const isIncome=txType==='income';
+
+  // Merge expense + default income categories
+  const incomeCats=useMemo(()=>{
+    const existing=categories.filter(c=>c.catType==='income');
+    if(existing.length) return existing;
+    return DEFAULT_INCOME_CATS;
+  },[categories]);
+  const expenseCats=useMemo(()=>categories.filter(c=>c.catType!=='income'),[categories]);
+  const activeCats=isIncome?incomeCats:expenseCats;
+
+  const[form,setForm]=useState(()=>{
+    if(isE) return{...expense};
+    const defCat=isIncome?incomeCats[0]?.id:expenseCats[0]?.id||categories[0]?.id||'';
+    return{title:'',amount:'',currency:expense?.currency||'SAR',category:defCat,date:expense?.date||localDS(),notes:'',budgetId:expense?.budgetId||'',paymentMethod:'cash',expType:'variable',priority:'essential',nextPaymentDate:''};
+  });
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
-  const save=()=>{if(!form.title.trim()||!form.amount){return;}
-    // Store exchange rate at time of saving for accurate historical tracking
+
+  // When switching txType, reset category to first of new type
+  const switchTxType=(t)=>{
+    setTxType(t);
+    const cats=t==='income'?incomeCats:expenseCats;
+    f('category',cats[0]?.id||'');
+  };
+
+  const save=()=>{
+    if(!form.title.trim()||!form.amount) return;
     const rates=getStoredRates().rates;
     const savedRates={};
     CURRENCIES.forEach(c=>{if(c.code!==form.currency){const fr=rates[form.currency]||1;const tr=rates[c.code]||1;savedRates[c.code]=Math.round((tr/fr)*1000000)/1000000;}});
-    onSave({...form,id:form.id||uid(),amount:parseFloat(form.amount),savedRates:form.savedRates||savedRates,savedRateDate:form.savedRateDate||new Date().toISOString(),createdAt:form.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
+    onSave({...form,id:form.id||uid(),txType,amount:parseFloat(form.amount),savedRates:form.savedRates||savedRates,savedRateDate:form.savedRateDate||new Date().toISOString(),createdAt:form.createdAt||new Date().toISOString(),updatedAt:new Date().toISOString()});
   };
+
   const pay=[{v:'cash',l:T('نقد','Cash',language),i:'💵'},{v:'card',l:T('بطاقة','Card',language),i:'💳'},{v:'transfer',l:T('تحويل','Transfer',language),i:'🏦'}];
+  const accentColor=isIncome?'var(--lime)':'var(--coral)';
+  const accentGrad=isIncome?'var(--lime-g)':'var(--coral-g)';
+
   return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:420,maxHeight:'90dvh',overflow:'auto'}}>
-    <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>{isE?T('تعديل مصروف','Edit Expense',language):T('مصروف جديد','New Expense',language)}</h3></div>
+    <div style={{padding:'16px 24px',borderBottom:'1px solid var(--border)'}}>
+      {/* Income / Expense toggle */}
+      <div style={{display:'flex',gap:6,marginBottom:12,background:'var(--bg3)',borderRadius:12,padding:4}}>
+        {[{t:'expense',l:T('مصروف','Expense',language),i:'📤',c:'var(--coral)'},{t:'income',l:T('إيراد','Income',language),i:'📥',c:'var(--lime)'}].map(({t,l,i,c})=>(
+          <div key={t} onClick={()=>switchTxType(t)} style={{flex:1,padding:'8px',borderRadius:9,cursor:'pointer',textAlign:'center',fontWeight:800,fontSize:13,transition:'all .15s',background:txType===t?c:'transparent',color:txType===t?'white':c,boxShadow:txType===t?'0 2px 8px '+c+'55':'none'}}>
+            {i} {l}
+          </div>
+        ))}
+      </div>
+      <h3 style={{fontSize:15,fontWeight:800,color:accentColor}}>{isE?(isIncome?T('تعديل إيراد','Edit Income',language):T('تعديل مصروف','Edit Expense',language)):(isIncome?T('إيراد جديد','New Income',language):T('مصروف جديد','New Expense',language))}</h3>
+    </div>
     <div style={{padding:20,display:'flex',flexDirection:'column',gap:14}}>
-      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الوصف','Description',language)}</label><input className="field" value={form.title} onChange={e=>f('title',e.target.value)} placeholder={T('قهوة، غداء، بنزين...','Coffee, lunch, gas...',language)}/></div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 110px',gap:8}}><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('المبلغ','Amount',language)}</label><input className="field" type="number" step="0.01" value={form.amount} onChange={e=>f('amount',e.target.value)} placeholder="0.00" style={{fontSize:20,fontWeight:900}}/></div><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('العملة','Currency',language)}</label><select className="field" value={form.currency} onChange={e=>f('currency',e.target.value)} style={{width:'100%',paddingLeft:6,paddingRight:24}}>{CURRENCIES.map(c=>(<option key={c.code} value={c.code}>{c.icon} {c.code}</option>))}</select></div></div>
-      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('التصنيف','Category',language)}</label><div style={{display:'flex',flexWrap:'wrap',gap:6}}>{categories.map(c=>(<div key={c.id} onClick={()=>f('category',c.id)} style={{padding:'6px 12px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${form.category===c.id?c.color:'var(--border)'}`,background:form.category===c.id?`${c.color}22`:'transparent',color:form.category===c.id?c.color:'var(--text2)',transition:'all .15s'}}>{c.icon} {language==='ar'?c.name:c.nameEn}</div>))}</div></div>
+      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الوصف','Description',language)}</label><input className="field" value={form.title} onChange={e=>f('title',e.target.value)} placeholder={isIncome?T('راتب، مكافأة، كاش باك...','Salary, bonus, cashback...',language):T('قهوة، غداء، بنزين...','Coffee, lunch, gas...',language)} style={{borderColor:form.title?accentColor:undefined}}/></div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 110px',gap:8}}><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('المبلغ','Amount',language)}</label><input className="field" type="number" step="0.01" value={form.amount} onChange={e=>f('amount',e.target.value)} placeholder="0.00" style={{fontSize:20,fontWeight:900,color:accentColor}}/></div><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('العملة','Currency',language)}</label><select className="field" value={form.currency} onChange={e=>f('currency',e.target.value)} style={{width:'100%',paddingLeft:6,paddingRight:24}}>{CURRENCIES.map(c=>(<option key={c.code} value={c.code}>{c.icon} {c.code}</option>))}</select></div></div>
+      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('التصنيف','Category',language)}</label><div style={{display:'flex',flexWrap:'wrap',gap:6}}>{activeCats.map(c=>(<div key={c.id} onClick={()=>f('category',c.id)} style={{padding:'6px 12px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${form.category===c.id?c.color:'var(--border)'}`,background:form.category===c.id?`${c.color}22`:'transparent',color:form.category===c.id?c.color:'var(--text2)',transition:'all .15s'}}>{c.icon} {language==='ar'?c.name:c.nameEn}</div>))}</div></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('التاريخ','Date',language)}</label><input className="field" type="date" value={form.date} onChange={e=>f('date',e.target.value)}/></div>
-      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('طريقة الدفع','Payment',language)}</label><div style={{display:'flex',gap:6}}>{pay.map(p=>(<div key={p.v} onClick={()=>f('paymentMethod',p.v)} style={{flex:1,padding:'8px 6px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'center',border:`2px solid ${form.paymentMethod===p.v?'var(--teal)':'var(--border)'}`,background:form.paymentMethod===p.v?'var(--teal-g)':'transparent',color:form.paymentMethod===p.v?'var(--teal)':'var(--text2)'}}>{p.i} {p.l}</div>))}</div></div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('طريقة الدفع','Payment',language)}</label><div style={{display:'flex',gap:6}}>{pay.map(p=>(<div key={p.v} onClick={()=>f('paymentMethod',p.v)} style={{flex:1,padding:'8px 6px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'center',border:`2px solid ${form.paymentMethod===p.v?accentColor:'var(--border)'}`,background:form.paymentMethod===p.v?accentGrad:'transparent',color:form.paymentMethod===p.v?accentColor:'var(--text2)'}}>{p.i} {p.l}</div>))}</div></div>
+      {!isIncome&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
         <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>⚙️ {T('النوع','Type',language)}</label><div style={{display:'flex',gap:6}}>{[{v:'fixed',l:T('ثابت','Fixed',language),i:'🔒',c:'var(--gold)'},{v:'variable',l:T('متغير','Variable',language),i:'🔀',c:'var(--electric)'}].map(p=>(<div key={p.v} onClick={()=>f('expType',p.v)} style={{flex:1,padding:'8px 6px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'center',border:`2px solid ${form.expType===p.v?p.c:'var(--border)'}`,background:form.expType===p.v?`${p.c}22`:'transparent',color:form.expType===p.v?p.c:'var(--text2)'}}>{p.i} {p.l}</div>))}</div></div>
         <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>🎯 {T('الأولوية','Priority',language)}</label><div style={{display:'flex',gap:4}}>{[{v:'essential',l:T('ضروري','Essential',language),i:'🔴',c:'var(--coral)'},{v:'comfort',l:T('مريحة','Comfort',language),i:'🟡',c:'var(--gold)'},{v:'luxury',l:T('رفاهية','Luxury',language),i:'🟢',c:'var(--lime)'}].map(p=>(<div key={p.v} onClick={()=>f('priority',p.v)} style={{flex:1,padding:'6px 4px',borderRadius:8,fontSize:11,fontWeight:700,cursor:'pointer',textAlign:'center',border:`2px solid ${form.priority===p.v?p.c:'var(--border)'}`,background:form.priority===p.v?`${p.c}22`:'transparent',color:form.priority===p.v?p.c:'var(--text2)'}}>{p.i}<div style={{fontSize:9,marginTop:2}}>{p.l}</div></div>))}</div></div>
-      </div>
-      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>📅 {T('تاريخ الدفعة القادمة','Next Payment Date',language)}</label><input className="field" type="date" value={form.nextPaymentDate||''} onChange={e=>f('nextPaymentDate',e.target.value)} placeholder={T('اختياري','Optional',language)}/></div>
+      </div>}
+      {!isIncome&&<div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>📅 {T('تاريخ الدفعة القادمة','Next Payment Date',language)}</label><input className="field" type="date" value={form.nextPaymentDate||''} onChange={e=>f('nextPaymentDate',e.target.value)} placeholder={T('اختياري','Optional',language)}/></div>}
       {budgets.length>0&&<div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('ميزانية (اختياري)','Budget (optional)',language)}</label><select className="field" value={form.budgetId||''} onChange={e=>f('budgetId',e.target.value)}><option value="">{T('— بدون —','— None —',language)}</option>{budgets.filter(b=>!b.closed).map(b=>(<option key={b.id} value={b.id}>{b.icon} {b.title}</option>))}</select></div>}
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('ملاحظات','Notes',language)}</label><textarea className="field" rows={2} value={form.notes} onChange={e=>f('notes',e.target.value)}/></div>
     </div>
-    <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}><button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button><button className="btn btn-coral" onClick={save}>💰 {T('حفظ','Save',language)}</button></div>
+    <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}><button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button><button className="btn" style={{background:accentColor,color:'white'}} onClick={save}>{isIncome?'📥':'💰'} {T('حفظ','Save',language)}</button></div>
   </div></div>);
 }
 
 function CategoryModal({category,language,onSave,onClose}){
   const isE=category&&category.id&&!category._isNew;
-  const[form,setForm]=useState(()=>isE?{...category}:{name:'',nameEn:'',icon:'🏷️',color:'#FF6B6B',plannedBudget:''});
+  const initType=category?.catType||'expense';
+  const[form,setForm]=useState(()=>isE?{...category}:{name:'',nameEn:'',icon:'🏷️',color:'#FF6B6B',plannedBudget:'',catType:initType});
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
-  const icons=['🏷️','🍕','☕','🍔','🥗','🧁','🍽️','🍺','🥤','🎮','⛽','💻','📱','🎁','✈️','🐱','🐕','🏋️','🎵','📦','🎬','🌙','🕌','📿','🎒','🏕️','⚽','🎂','👕','👗','💇','🧹','🔧','🏥','💊','🚗','🚕','🚌','⛽','🏠','💡','📞','💧','🔌','🎓','📚','📝','💼','👶','💍','🧴','🧼','🍼','🛏️','🪑','📺','🖨️','🎨','🏖️','⛷️','🎣','🏊','🎭','🎪','🎟️','🛍️','💎','⌚','👓','🧳','🛒','🏦','💳','📮','🛠️','🔑','🏗️','🌿','🐈','🐾','🎶','🍷','🧀','🥩','🍰','🎤','📸','🏡','🚿','🧲','🔋','📡','🖥️','⚡'];
+  const isIncome=form.catType==='income';
+  const icons=['🏷️','💼','💰','📥','🏦','🤝','🎁','💎','📊','💹','🏆','🥇','📈',
+    '🍕','☕','🍔','🥗','🧁','🍽️','🍺','🥤','🎮','⛽','💻','📱','✈️','🐱','🐕',
+    '🏋️','🎵','📦','🎬','🌙','🕌','📿','🎒','🏕️','⚽','🎂','👕','👗','💇','🧹',
+    '🔧','🏥','💊','🚗','🚕','🚌','🏠','💡','📞','💧','🔌','🎓','📚','📝','👶',
+    '💍','🧴','🧼','🍼','🛏️','🪑','📺','🎨','🏖️','⛷️','🎣','🏊','🎭','🛍️',
+    '⌚','👓','🧳','🛒','💳','📮','🛠️','🔑','🏗️','🌿','🐾','🎶','🍷','🥩','🍰',
+    '🎤','📸','🏡','🚿','🧲','🔋','📡','🖥️','⚡'];
+  const accentColor=isIncome?'var(--lime)':'var(--teal)';
   return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:380}}>
-    <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>{isE?T('تعديل تصنيف','Edit Category',language):T('تصنيف جديد','New Category',language)}</h3></div>
+    <div style={{padding:'16px 24px',borderBottom:'1px solid var(--border)'}}>
+      {/* type toggle */}
+      <div style={{display:'flex',gap:6,marginBottom:12,background:'var(--bg3)',borderRadius:12,padding:4}}>
+        {[{t:'expense',l:T('مصروف','Expense',language),i:'📤',c:'var(--coral)'},{t:'income',l:T('إيراد','Income',language),i:'📥',c:'var(--lime)'}].map(({t,l,i,c})=>(
+          <div key={t} onClick={()=>f('catType',t)} style={{flex:1,padding:'7px',borderRadius:9,cursor:'pointer',textAlign:'center',fontWeight:800,fontSize:13,transition:'all .15s',background:form.catType===t?c:'transparent',color:form.catType===t?'white':c,boxShadow:form.catType===t?'0 2px 8px '+c+'55':'none'}}>
+            {i} {l}
+          </div>
+        ))}
+      </div>
+      <h3 style={{fontSize:15,fontWeight:800,color:accentColor}}>{isE?T('تعديل تصنيف','Edit Category',language):T('تصنيف جديد','New Category',language)}</h3>
+    </div>
     <div style={{padding:20,display:'flex',flexDirection:'column',gap:14}}>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الاسم بالعربي','Arabic Name',language)}</label><input className="field" value={form.name} onChange={e=>f('name',e.target.value)}/></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الاسم بالإنجليزي','English Name',language)}</label><input className="field" value={form.nameEn} onChange={e=>f('nameEn',e.target.value)}/></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الأيقونة','Icon',language)}</label><IconPick icons={icons} sel={form.icon} onSel={v=>f('icon',v)}/></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('اللون','Color',language)}</label><ColPick sel={form.color} onSel={v=>f('color',v)}/></div>
-      <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>📊 {T('الميزانية الشهرية المخططة','Monthly Planned Budget',language)}</label><input className="field" type="number" step="1" value={form.plannedBudget||''} onChange={e=>f('plannedBudget',e.target.value)} placeholder={T('0 = بلا قيد','0 = No limit',language)}/></div>
+      {!isIncome&&<div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>📊 {T('الميزانية الشهرية المخططة','Monthly Planned Budget',language)}</label><input className="field" type="number" step="1" value={form.plannedBudget||''} onChange={e=>f('plannedBudget',e.target.value)} placeholder={T('0 = بلا قيد','0 = No limit',language)}/></div>}
     </div>
-    <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}><button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button><button className="btn btn-teal" onClick={()=>{if(!form.name.trim())return;onSave({...form,id:form.id||uid(),createdAt:form.createdAt||new Date().toISOString()});}}>✅ {T('حفظ','Save',language)}</button></div>
+    <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}><button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button><button className="btn" style={{background:accentColor,color:'white'}} onClick={()=>{if(!form.name.trim())return;onSave({...form,id:form.id||uid(),createdAt:form.createdAt||new Date().toISOString()});}}>✅ {T('حفظ','Save',language)}</button></div>
   </div></div>);
 }
 
@@ -2043,8 +2156,8 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
   const hiddenFromReportIds=useMemo(()=>new Set(budgets.filter(b=>b.closed||b.includeInReports===false).map(b=>b.id)),[budgets]);
   // allExp: used for the expense LIST display only (excludes closed)
   const allExp=useMemo(()=>allExpRaw.filter(e=>!e.budgetId||!closedBudgetIds.has(e.budgetId)),[allExpRaw,closedBudgetIds]);
-  // analyticsExp: used for ALL analytics/charts/totals (excludes closed + includeInReports=false)
-  const analyticsExp=useMemo(()=>allExpRaw.filter(e=>!e.budgetId||!hiddenFromReportIds.has(e.budgetId)),[allExpRaw,hiddenFromReportIds]);
+  // analyticsExp: expenses only (no income), for charts/totals (excludes closed + includeInReports=false)
+  const analyticsExp=useMemo(()=>allExpRaw.filter(e=>e.txType!=='income'&&(!e.budgetId||!hiddenFromReportIds.has(e.budgetId))),[allExpRaw,hiddenFromReportIds]);
 
   const filtered=useMemo(()=>{
     const now=new Date();let from,to;
@@ -2073,7 +2186,8 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
 
   const getCatName=(id)=>{const c=cats.find(c=>c.id===id);return c?(language==='ar'?c.name:c.nameEn):'❓';};
   const getCat=(id)=>cats.find(c=>c.id===id)||{icon:'❓',color:'#666',name:'أخرى',nameEn:'Other'};
-  const getBudgetSpent=useCallback((bid)=>{const b=budgets.find(x=>x.id===bid);const bCur=b?b.currency:baseCur;return allExpRaw.filter(e=>e.budgetId===bid).reduce((s,e)=>s+expToBudget(e,bCur),0);},[allExpRaw,budgets,baseCur,expToBudget]);
+  const getBudgetSpent=useCallback((bid)=>{const b=budgets.find(x=>x.id===bid);const bCur=b?b.currency:baseCur;return allExpRaw.filter(e=>e.budgetId===bid&&e.txType!=='income').reduce((s,e)=>s+expToBudget(e,bCur),0);},[allExpRaw,budgets,baseCur,expToBudget]);
+  const getBudgetIncome=useCallback((bid)=>{const b=budgets.find(x=>x.id===bid);const bCur=b?b.currency:baseCur;return allExpRaw.filter(e=>e.budgetId===bid&&e.txType==='income').reduce((s,e)=>s+expToBudget(e,bCur),0);},[allExpRaw,budgets,baseCur,expToBudget]);
 
   // Group by date
   const grouped=useMemo(()=>{const g={};filtered.forEach(e=>{const d=e.date;if(!g[d])g[d]=[];g[d].push(e);});return Object.entries(g);},[filtered]);
@@ -2147,8 +2261,9 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
   },[allExpRaw,onSaveExpense,language,toast]);
 
   return(<div style={{display:'flex',flexDirection:'column',gap:16}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2 style={{fontSize:22,fontWeight:900}}>💰 {T('المصاريف','Expenses',language)}</h2><div style={{display:'flex',gap:6}}>
-      <button className="btn btn-coral btn-sm" onClick={()=>setExpModal({_isNew:true})}>+ {T('مصروف','Expense',language)}</button>
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2 style={{fontSize:22,fontWeight:900}}>💰 {T('المعاملات','Transactions',language)}</h2><div style={{display:'flex',gap:6}}>
+      <button className="btn btn-coral btn-sm" onClick={()=>setExpModal({_isNew:true,txType:'expense'})}>📤 {T('مصروف','Expense',language)}</button>
+      <button className="btn btn-lime btn-sm" onClick={()=>setExpModal({_isNew:true,txType:'income'})}>📥 {T('إيراد','Income',language)}</button>
       <button className="btn btn-gold btn-sm" title={T('قوالب المصاريف الثابتة','Recurring Templates',language)} onClick={()=>setRecurModal(true)}>📌</button>
       <button className="btn btn-ghost btn-sm" onClick={()=>setMgtMode(!mgtMode)}>{mgtMode?'✕':'⚙️'}</button>
       <button className="btn btn-ghost btn-sm" onClick={handleExportXlsx}>📤 Excel</button>
@@ -2169,12 +2284,20 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
     })()}
 
     {mgtMode&&<div className="card" style={{padding:14}}>
-      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}><h3 style={{fontSize:14,fontWeight:800}}>🏷️ {T('التصنيفات','Categories',language)}</h3><button className="btn btn-teal btn-xs" onClick={()=>setCatModal({_isNew:true})}>+ {T('جديد','New',language)}</button></div>
-      <div style={{display:'flex',flexWrap:'wrap',gap:6}}>{cats.map(c=>(<div key={c.id} style={{display:'flex',alignItems:'center',gap:4,padding:'6px 10px',borderRadius:10,background:`${c.color}22`,border:`1px solid ${c.color}44`}}>
+      {/* Expense Categories */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}><h3 style={{fontSize:14,fontWeight:800}}>📤 {T('تصنيفات المصاريف','Expense Categories',language)}</h3><button className="btn btn-teal btn-xs" onClick={()=>setCatModal({_isNew:true,catType:'expense'})}>+ {T('جديد','New',language)}</button></div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:14}}>{cats.filter(c=>c.catType!=='income').map(c=>(<div key={c.id} style={{display:'flex',alignItems:'center',gap:4,padding:'6px 10px',borderRadius:10,background:`${c.color}22`,border:`1px solid ${c.color}44`}}>
         <span>{c.icon}</span><span style={{fontSize:12,fontWeight:600,color:c.color}}>{language==='ar'?c.name:c.nameEn}</span>
         <span style={{cursor:'pointer',fontSize:10,opacity:.6}} onClick={()=>setCatModal(c)}>✏️</span>
         <span style={{cursor:'pointer',fontSize:10,opacity:.6}} onClick={()=>onDeleteCategory(c)}>✕</span>
       </div>))}</div>
+      {/* Income Categories */}
+      <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}><h3 style={{fontSize:14,fontWeight:800}}>📥 {T('تصنيفات الإيرادات','Income Categories',language)}</h3><button className="btn btn-lime btn-xs" onClick={()=>setCatModal({_isNew:true,catType:'income'})}>+ {T('جديد','New',language)}</button></div>
+      <div style={{display:'flex',flexWrap:'wrap',gap:6,marginBottom:14}}>{(()=>{const incomeCats=cats.filter(c=>c.catType==='income');const display=incomeCats.length?incomeCats:DEFAULT_INCOME_CATS;return display.map(c=>(<div key={c.id} style={{display:'flex',alignItems:'center',gap:4,padding:'6px 10px',borderRadius:10,background:`${c.color}22`,border:`1px solid ${c.color}44`}}>
+        <span>{c.icon}</span><span style={{fontSize:12,fontWeight:600,color:c.color}}>{language==='ar'?c.name:c.nameEn}</span>
+        {incomeCats.length>0&&<><span style={{cursor:'pointer',fontSize:10,opacity:.6}} onClick={()=>setCatModal(c)}>✏️</span>
+        <span style={{cursor:'pointer',fontSize:10,opacity:.6}} onClick={()=>onDeleteCategory(c)}>✕</span></>}
+      </div>));})()}</div>
       <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginTop:14,marginBottom:10}}><h3 style={{fontSize:14,fontWeight:800}}>🎯 {T('الميزانيات','Budgets',language)}</h3><button className="btn btn-gold btn-xs" onClick={()=>setBudModal({_isNew:true})}>+ {T('جديدة','New',language)}</button></div>
       {!budgets.length?<p style={{fontSize:12,color:'var(--text2)'}}>🫥 {T('لا ميزانيات','No budgets',language)}</p>:budgets.map(b=>{const spent=getBudgetSpent(b.id);const pct=b.totalAmount?Math.min(spent/b.totalAmount*100,100):0;return(
         <div key={b.id} className="exp-budget-card" style={{cursor:b.closed?'default':'pointer',opacity:b.closed?.7:1}} onClick={()=>{if(!b.closed)setExpModal({_isNew:true,budgetId:b.id,currency:b.currency});}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><div style={{display:'flex',alignItems:'center',gap:6}}><span style={{fontSize:18}}>{b.icon}</span><span style={{fontWeight:700,fontSize:14}}>{b.title}</span>{b.closed&&<span style={{fontSize:9,padding:'2px 6px',borderRadius:6,background:'var(--coral-g)',color:'var(--coral)',fontWeight:700}}>🔒 {T('مغلقة','Closed',language)}</span>}<span style={{fontSize:11,color:'var(--text2)'}}>{b.currency}</span></div><div style={{display:'flex',gap:4}}><span style={{cursor:'pointer',fontSize:12}} onClick={e=>{e.stopPropagation();setBudModal(b);}}>✏️</span><span style={{cursor:'pointer',fontSize:12}} onClick={e=>{e.stopPropagation();onDeleteBudget(b);}}>🗑️</span></div></div>
@@ -2203,10 +2326,15 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
       </div>
     </div>}
 
-    <div className="exp-summary">
-      <div className="exp-summary-card"><div className="exp-lbl">{T('هذا الشهر','This Month',language)} ({baseCur})</div><div className="exp-val" style={{color:'var(--coral)'}}>{fmtMoney(monthTotal)}</div></div>
-      <div className="exp-summary-card"><div className="exp-lbl">{T('الفترة المحددة','Selected Period',language)} ({baseCur})</div><div className="exp-val" style={{color:'var(--teal)'}}>{fmtMoney(totalFiltered)}</div><div className="exp-lbl">{analyticsFiltered.length} {T('عملية','transactions',language)}</div></div>
-    </div>
+    {(()=>{
+      const curM2=localDS().slice(0,7);
+      const monthIncome=allExpRaw.filter(e=>e.txType==='income'&&e.date.startsWith(curM2)&&(!e.budgetId||!hiddenFromReportIds.has(e.budgetId))).reduce((s,e)=>s+toBase(e.amount,e.currency),0);
+      const netMonth=monthIncome-monthTotal;
+      return(<div className="exp-summary">
+        <div className="exp-summary-card"><div className="exp-lbl">📤 {T('مصاريف الشهر','Expenses',language)} ({baseCur})</div><div className="exp-val" style={{color:'var(--coral)'}}>{fmtMoney(monthTotal)}</div></div>
+        <div className="exp-summary-card"><div className="exp-lbl">📥 {T('إيرادات الشهر','Income',language)} ({baseCur})</div><div className="exp-val" style={{color:'var(--lime)'}}>{fmtMoney(monthIncome)}</div><div className="exp-lbl" style={{color:netMonth>=0?'var(--lime)':'var(--coral)',fontWeight:700}}>{netMonth>=0?'↑':'↓'} {fmtMoney(Math.abs(netMonth))}</div></div>
+      </div>);
+    })()}
 
     <div className="card" style={{padding:14}}>
       <div style={{display:'flex',gap:4,marginBottom:10,flexWrap:'wrap'}}>{dateRanges.map(r=>(<div key={r.id} className={`exp-tab ${dateRange===r.id?'active':''}`} onClick={()=>setDateRange(r.id)}>{r.l}</div>))}</div>
@@ -2221,14 +2349,18 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
         {chartTab==='budgets'&&(<div style={{width:'100%'}}>{!budgets.length?<p style={{textAlign:'center',color:'var(--text2)',padding:20}}>{T('لا ميزانيات — أضف من ⚙️','No budgets — add from ⚙️',language)}</p>:selBudget?(()=>{
           const b=budgets.find(x=>x.id===selBudget);if(!b)return null;
           const bExps=allExpRaw.filter(e=>e.budgetId===b.id);
-          const spent=bExps.reduce((s,e)=>s+expToBudget(e,b.currency),0);
-          const pct=b.totalAmount?Math.min(spent/b.totalAmount*100,100):0;
-          const remaining=b.totalAmount-spent;
-          // By category with expenses
-          const byC={};bExps.forEach(e=>{const cid=e.category;if(!byC[cid])byC[cid]={amount:0,count:0,items:[]};byC[cid].amount+=expToBudget(e,b.currency);byC[cid].count++;byC[cid].items.push(e);});
+          const bIncome=bExps.filter(e=>e.txType==='income').reduce((s,e)=>s+expToBudget(e,b.currency),0);
+          const spent=bExps.filter(e=>e.txType!=='income').reduce((s,e)=>s+expToBudget(e,b.currency),0);
+          const effectiveBudget=b.totalAmount+bIncome;
+          const pct=effectiveBudget?Math.min(spent/effectiveBudget*100,100):0;
+          const remaining=effectiveBudget-spent;
+          // By category with expenses only (no income)
+          const bExpOnly=bExps.filter(e=>e.txType!=='income');
+          const bIncOnly=bExps.filter(e=>e.txType==='income');
+          const byC={};bExpOnly.forEach(e=>{const cid=e.category;if(!byC[cid])byC[cid]={amount:0,count:0,items:[]};byC[cid].amount+=expToBudget(e,b.currency);byC[cid].count++;byC[cid].items.push(e);});
           Object.values(byC).forEach(v=>v.items.sort((a,b)=>new Date(b.date)-new Date(a.date)));
           const catEntries=Object.entries(byC).sort((a,b)=>b[1].amount-a[1].amount);
-          // By date
+          // By date (all including income)
           const byDate={};bExps.sort((a,b)=>new Date(b.date)-new Date(a.date)).forEach(e=>{if(!byDate[e.date])byDate[e.date]=[];byDate[e.date].push(e);});
           return(<div>
             <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:14}}>
@@ -2238,7 +2370,8 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
               <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
                 <button className="btn btn-ghost btn-xs" onClick={()=>setBudModal(b)}>✏️</button>
                 <button className="btn btn-ghost btn-xs" style={{color:'var(--coral)'}} onClick={()=>{onDeleteBudget(b);setSelBudget(null);}}>🗑️</button>
-                {!b.closed&&<button className="btn btn-coral btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency})}>+ {T('مصروف','Expense',language)}</button>}
+                {!b.closed&&<><button className="btn btn-coral btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency,txType:'expense'})}>📤 {T('مصروف','Expense',language)}</button>
+                <button className="btn btn-lime btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency,txType:'income'})}>📥 {T('إيراد','Income',language)}</button></>}
               </div>
             </div>
             <div style={{marginBottom:10,display:'flex',gap:8}}>
@@ -2279,8 +2412,9 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
             </div>
 
             <div className="exp-budget-card" style={{marginBottom:14}}>
-              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}><span style={{fontSize:28,fontWeight:900,color:pct>=100?'var(--coral)':pct>=80?'var(--gold)':'var(--lime)'}}>{Math.round(pct)}%</span><span style={{fontSize:14,fontWeight:700,color:'var(--text2)'}}>{fmtMoney(spent)} / {fmtMoney(b.totalAmount)} {b.currency}</span></div>
+              <div style={{display:'flex',justifyContent:'space-between',alignItems:'baseline'}}><span style={{fontSize:28,fontWeight:900,color:pct>=100?'var(--coral)':pct>=80?'var(--gold)':'var(--lime)'}}>{Math.round(pct)}%</span><span style={{fontSize:14,fontWeight:700,color:'var(--text2)'}}>{fmtMoney(spent)} / {fmtMoney(effectiveBudget)} {b.currency}</span></div>
               <div className="exp-budget-bar" style={{height:12,marginTop:8}}><div className="exp-budget-fill" style={{width:`${pct}%`,background:pct>=100?'linear-gradient(90deg,var(--gold),var(--coral))':pct>=80?'linear-gradient(90deg,var(--lime),var(--gold))':'var(--lime)'}}/></div>
+              {bIncome>0&&<div style={{display:'flex',alignItems:'center',gap:6,marginTop:6,padding:'6px 10px',borderRadius:8,background:'var(--lime-g)',border:'1px solid var(--lime)'}}><span style={{fontSize:12}}>📥</span><span style={{fontSize:12,fontWeight:700,color:'var(--lime)'}}>{T('إيرادات: ','Income: ',language)}{fmtMoney(bIncome)} {b.currency}</span><span style={{fontSize:11,color:'var(--text2)',marginRight:'auto'}}>{T('← ميزانية فعلية','← effective budget',language)} {fmtMoney(effectiveBudget)}</span></div>}
               <div style={{display:'flex',justifyContent:'space-between',marginTop:6,fontSize:12,fontWeight:600}}><span style={{color:'var(--text2)'}}>{bExps.length} {T('عملية','transactions',language)}</span><span style={{color:remaining<0?'var(--coral)':'var(--lime)'}}>{remaining>=0?T('متبقي: ','Left: ',language)+fmtMoney(remaining):T('تجاوز: ','Over: ',language)+fmtMoney(Math.abs(remaining))} {b.currency}</span></div>
             </div>
 
@@ -2329,13 +2463,15 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
 
     <div className="card" style={{padding:14}}>
       <div className="search-wrap" style={{marginBottom:10}}><span className="search-icon">🔍</span><input className="field" value={expSearch} onChange={e=>setExpSearch(e.target.value)} placeholder={T('ابحث في المصاريف...','Search expenses...',language)} style={{paddingRight:language==='ar'?36:12,paddingLeft:language!=='ar'?36:12}}/>{expSearch&&<span className="search-clear" onClick={()=>setExpSearch('')}>✕</span>}</div>
-      {!grouped.length?<p style={{textAlign:'center',color:'var(--text2)',padding:20}}>🫥 {T('لا مصاريف','No expenses',language)}</p>:grouped.map(([date,exps])=>(<div key={date}>
-        <div className="exp-date-group">{new Date(date+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'long',day:'numeric',month:'short'})} — {fmtMoney(exps.reduce((s,e)=>s+toBase(e.amount,e.currency),0))} {baseCur}</div>
-        {exps.map(e=>{const cat=getCat(e.category);return(<div key={e.id} className="exp-item">
+      {!grouped.length?<p style={{textAlign:'center',color:'var(--text2)',padding:20}}>🫥 {T('لا معاملات','No transactions',language)}</p>:grouped.map(([date,exps])=>(<div key={date}>
+        <div className="exp-date-group">{new Date(date+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'long',day:'numeric',month:'short'})}
+          {(()=>{const dayInc=exps.filter(e=>e.txType==='income').reduce((s,e)=>s+toBase(e.amount,e.currency),0);const dayExp=exps.filter(e=>e.txType!=='income').reduce((s,e)=>s+toBase(e.amount,e.currency),0);if(dayInc>0&&dayExp>0)return <span> — <span style={{color:'var(--lime)'}}>+{fmtMoney(dayInc)}</span> / <span style={{color:'var(--coral)'}}>-{fmtMoney(dayExp)}</span> {baseCur}</span>;if(dayInc>0)return <span> — <span style={{color:'var(--lime)'}}>+{fmtMoney(dayInc)}</span> {baseCur}</span>;return <span> — {fmtMoney(dayExp)} {baseCur}</span>;})()}
+        </div>
+        {exps.map(e=>{const cat=getCat(e.category);const isInc=e.txType==='income';return(<div key={e.id} className="exp-item" style={{borderRight:isInc?'3px solid var(--lime)':'3px solid transparent',paddingRight:isInc?8:0}}>
           <div className="exp-cat-dot" style={{background:`${cat.color}22`}}>{cat.icon}</div>
-          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14}}>{e.title}</div><div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:6,flexWrap:'wrap'}}><span>{language==='ar'?cat.name:cat.nameEn}</span>{e.paymentMethod&&<span>· {e.paymentMethod==='cash'?'💵':e.paymentMethod==='card'?'💳':'🏦'}</span>}{e.expType&&<span style={{padding:'1px 6px',borderRadius:5,fontWeight:700,background:e.expType==='fixed'?'var(--gold-g)':'var(--electric-g)',color:e.expType==='fixed'?'var(--gold)':'var(--electric)'}}>{e.expType==='fixed'?'🔒':'🔀'}{T(e.expType==='fixed'?' ثابت':' متغير',e.expType==='fixed'?' Fixed':' Var',language)}</span>}{e.priority&&<span style={{padding:'1px 6px',borderRadius:5,fontWeight:700,background:e.priority==='essential'?'var(--coral-g)':e.priority==='comfort'?'var(--gold-g)':'var(--lime-g)',color:e.priority==='essential'?'var(--coral)':e.priority==='comfort'?'var(--gold)':'var(--lime)'}}>{e.priority==='essential'?'🔴':e.priority==='comfort'?'🟡':'🟢'}</span>}{e.nextPaymentDate&&<span style={{color:'var(--teal)'}}>📅 {new Date(e.nextPaymentDate+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'short',day:'numeric'})}</span>}{e.notes&&<span>· 📝</span>}</div></div>
-          <div style={{textAlign:'end'}}><div className="exp-amount" style={{color:cat.color}}>{e.amount.toFixed(e.amount%1?2:0)}</div><div style={{fontSize:10,color:'var(--text2)'}}>{CURRENCIES.find(c=>c.code===e.currency)?.icon} {e.currency}{e.currency!==baseCur&&<span style={{opacity:.6}}> ≈ {fmtMoney(toBase(e.amount,e.currency))} {baseCur}</span>}</div></div>
-          <div style={{display:'flex',flexDirection:'column',gap:2}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>setExpModal(e)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDeleteExpense(e)}>🗑️</button></div>
+          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14,display:'flex',alignItems:'center',gap:5}}>{e.title}{isInc&&<span style={{fontSize:9,padding:'1px 6px',borderRadius:5,background:'var(--lime-g)',color:'var(--lime)',fontWeight:700}}>📥 {T('إيراد','Income',language)}</span>}</div><div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:6,flexWrap:'wrap'}}><span>{language==='ar'?cat.name:cat.nameEn}</span>{e.paymentMethod&&<span>· {e.paymentMethod==='cash'?'💵':e.paymentMethod==='card'?'💳':'🏦'}</span>}{!isInc&&e.expType&&<span style={{padding:'1px 6px',borderRadius:5,fontWeight:700,background:e.expType==='fixed'?'var(--gold-g)':'var(--electric-g)',color:e.expType==='fixed'?'var(--gold)':'var(--electric)'}}>{e.expType==='fixed'?'🔒':'🔀'}{T(e.expType==='fixed'?' ثابت':' متغير',e.expType==='fixed'?' Fixed':' Var',language)}</span>}{!isInc&&e.priority&&<span style={{padding:'1px 6px',borderRadius:5,fontWeight:700,background:e.priority==='essential'?'var(--coral-g)':e.priority==='comfort'?'var(--gold-g)':'var(--lime-g)',color:e.priority==='essential'?'var(--coral)':e.priority==='comfort'?'var(--gold)':'var(--lime)'}}>{e.priority==='essential'?'🔴':e.priority==='comfort'?'🟡':'🟢'}</span>}{!isInc&&e.nextPaymentDate&&<span style={{color:'var(--teal)'}}>📅 {new Date(e.nextPaymentDate+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'short',day:'numeric'})}</span>}{e.notes&&<span>· 📝</span>}</div></div>
+          <div style={{textAlign:'end'}}><div className="exp-amount" style={{color:isInc?'var(--lime)':cat.color}}>{isInc?'+':''}{e.amount.toFixed(e.amount%1?2:0)}</div><div style={{fontSize:10,color:'var(--text2)'}}>{CURRENCIES.find(c=>c.code===e.currency)?.icon} {e.currency}{e.currency!==baseCur&&<span style={{opacity:.6}}> ≈ {fmtMoney(toBase(e.amount,e.currency))} {baseCur}</span>}</div></div>
+          <div style={{display:'flex',flexDirection:'column',gap:2}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>setExpModal({...e,txType:e.txType||'expense'})}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDeleteExpense(e)}>🗑️</button></div>
         </div>);})}
       </div>))}
     </div>
