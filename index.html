@@ -119,8 +119,8 @@ body::before{content:'';position:fixed;inset:0;background:radial-gradient(ellips
 .field{background:var(--bg);border:2px solid var(--border);border-radius:14px;padding:12px 16px;color:var(--text);width:100%;font-family:inherit;font-size:14px;transition:all .2s;outline:none}
 .field:focus{border-color:var(--teal);box-shadow:0 0 0 4px var(--teal-g)}
 .field::placeholder{color:var(--text2);opacity:.5}
-select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath fill='%238892B0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:left 14px center}
-[dir="ltr"] select.field{background-position:right 14px center}
+select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cpath fill='%238892B0' d='M6 8L1 3h10z'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:left 14px center;padding-left:36px}
+[dir="ltr"] select.field{background-position:right 14px center;padding-left:16px;padding-right:36px}
 .label{font-size:12px;font-weight:700;color:var(--text2);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;display:block}
 .badge{display:inline-flex;align-items:center;gap:3px;padding:3px 9px;border-radius:8px;font-size:11px;font-weight:700}
 .overlay{position:fixed;inset:0;background:rgba(0,0,0,.75);backdrop-filter:blur(8px);z-index:50;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .2s ease}
@@ -1409,7 +1409,7 @@ function ExpenseModal({expense,categories,budgets,language,onSave,onClose}){
     <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>{isE?T('تعديل مصروف','Edit Expense',language):T('مصروف جديد','New Expense',language)}</h3></div>
     <div style={{padding:20,display:'flex',flexDirection:'column',gap:14}}>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الوصف','Description',language)}</label><input className="field" value={form.title} onChange={e=>f('title',e.target.value)} placeholder={T('قهوة، غداء، بنزين...','Coffee, lunch, gas...',language)}/></div>
-      <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8}}><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('المبلغ','Amount',language)}</label><input className="field" type="number" step="0.01" value={form.amount} onChange={e=>f('amount',e.target.value)} placeholder="0.00" style={{fontSize:20,fontWeight:900}}/></div><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('العملة','Currency',language)}</label><select className="field" value={form.currency} onChange={e=>f('currency',e.target.value)}>{CURRENCIES.map(c=>(<option key={c.code} value={c.code}>{c.icon} {c.code}</option>))}</select></div></div>
+      <div style={{display:'grid',gridTemplateColumns:'1fr 110px',gap:8}}><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('المبلغ','Amount',language)}</label><input className="field" type="number" step="0.01" value={form.amount} onChange={e=>f('amount',e.target.value)} placeholder="0.00" style={{fontSize:20,fontWeight:900}}/></div><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('العملة','Currency',language)}</label><select className="field" value={form.currency} onChange={e=>f('currency',e.target.value)} style={{width:'100%',paddingLeft:6,paddingRight:24}}>{CURRENCIES.map(c=>(<option key={c.code} value={c.code}>{c.icon} {c.code}</option>))}</select></div></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('التصنيف','Category',language)}</label><div style={{display:'flex',flexWrap:'wrap',gap:6}}>{categories.map(c=>(<div key={c.id} onClick={()=>f('category',c.id)} style={{padding:'6px 12px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${form.category===c.id?c.color:'var(--border)'}`,background:form.category===c.id?`${c.color}22`:'transparent',color:form.category===c.id?c.color:'var(--text2)',transition:'all .15s'}}>{c.icon} {language==='ar'?c.name:c.nameEn}</div>))}</div></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('التاريخ','Date',language)}</label><input className="field" type="date" value={form.date} onChange={e=>f('date',e.target.value)}/></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('طريقة الدفع','Payment',language)}</label><div style={{display:'flex',gap:6}}>{pay.map(p=>(<div key={p.v} onClick={()=>f('paymentMethod',p.v)} style={{flex:1,padding:'8px 6px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',textAlign:'center',border:`2px solid ${form.paymentMethod===p.v?'var(--teal)':'var(--border)'}`,background:form.paymentMethod===p.v?'var(--teal-g)':'transparent',color:form.paymentMethod===p.v?'var(--teal)':'var(--text2)'}}>{p.i} {p.l}</div>))}</div></div>
@@ -1443,30 +1443,137 @@ function CategoryModal({category,language,onSave,onClose}){
   </div></div>);
 }
 
-function BudgetModal({budget,language,onSave,onClose}){
+function BudgetModal({budget,language,categories,onSave,onSaveAndImport,onClose}){
   const isE=budget&&budget.id&&!budget._isNew;
   const[form,setForm]=useState(()=>isE?{includeInReports:true,...budget}:{title:'',icon:'💰',color:'#FECA57',totalAmount:'',currency:'SAR',startDate:localDS(),endDate:'',type:'custom',includeInReports:true});
+  const[showImport,setShowImport]=useState(false);
+  const templates=getRecurringTemplates();
+  const[sel,setSel]=useState(()=>templates.reduce((o,t)=>({...o,[t.id||t.title]:true}),{}));
   const f=(k,v)=>setForm(p=>({...p,[k]:v}));
   const icons=['💰','🇵🇹','✈️','🏠','🎓','🌙','🚗','💻','🎁','💍','🏕️','🏗️','👶','🎉','📚'];
   const incl=form.includeInReports!==false;
-  return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400}}>
+  const rates=getStoredRates().rates;
+
+  const convertToBudget=(amount,fromCur)=>{
+    if(fromCur===form.currency||!form.currency)return amount;
+    return convertAmount(amount,fromCur,form.currency,rates);
+  };
+
+  const buildBudget=()=>({...form,id:form.id||uid(),totalAmount:parseFloat(form.totalAmount||0),createdAt:form.createdAt||new Date().toISOString()});
+
+  const handleSaveOnly=()=>{
+    if(!form.title.trim()||!form.totalAmount)return;
+    onSave(buildBudget());
+  };
+
+  const handleSaveAndImport=(tpls)=>{
+    if(!form.title.trim()||!form.totalAmount)return;
+    onSaveAndImport(buildBudget(),tpls);
+  };
+
+  const toggle=(key)=>setSel(p=>({...p,[key]:!p[key]}));
+  const chosen=templates.filter(t=>sel[t.id||t.title]);
+  const totalInBudgetCur=chosen.reduce((s,t)=>s+convertToBudget(parseFloat(t.amount)||0,t.currency),0);
+
+  // Import preview panel
+  if(showImport){
+
+    return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:420,maxHeight:'90dvh',overflow:'auto'}}>
+      <div style={{padding:'18px 20px',borderBottom:'1px solid var(--border)',display:'flex',alignItems:'center',gap:10}}>
+        <button className="btn btn-ghost btn-icon-xs" onClick={()=>setShowImport(false)}>←</button>
+        <div style={{flex:1}}>
+          <h3 style={{fontSize:15,fontWeight:800}}>📌 {T('اختر المصاريف للاستيراد','Select Expenses to Import',language)}</h3>
+          <div style={{fontSize:11,color:'var(--text2)',marginTop:2}}>{T('ستُضاف بتاريخ اليوم مرتبطة بالميزانية','Added today, linked to this budget',language)}</div>
+        </div>
+      </div>
+
+      {/* Budget currency info */}
+      {form.currency&&<div style={{padding:'10px 16px',background:'var(--teal-g)',borderBottom:'1px solid var(--border)',fontSize:12,color:'var(--teal)',fontWeight:700}}>
+        💱 {T(`عملة الميزانية: ${form.currency} — المبالغ بعملات مختلفة ستُحوَّل تلقائياً`,`Budget currency: ${form.currency} — different currencies auto-converted`,language)}
+      </div>}
+
+      <div style={{padding:'12px 16px',display:'flex',flexDirection:'column',gap:8}}>
+        {!templates.length&&<div style={{textAlign:'center',padding:24,color:'var(--text2)'}}><div style={{fontSize:40}}>📌</div><p style={{fontSize:13,marginTop:8}}>{T('لا توجد قوالب محفوظة. أضف قوالب أولاً من زر ⚙️','No templates yet. Add templates first via ⚙️',language)}</p></div>}
+
+        {templates.map(t=>{
+          const key=t.id||t.title;
+          const isSelected=sel[key];
+          const cat=categories?.find(c=>c.id===t.category)||{icon:'💰',color:'var(--teal)',name:'',nameEn:''};
+          const needsConversion=t.currency!==form.currency;
+          const converted=convertToBudget(parseFloat(t.amount)||0,t.currency);
+          return(
+            <div key={key} onClick={()=>toggle(key)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:12,cursor:'pointer',border:`2px solid ${isSelected?'var(--teal)':'var(--border)'}`,background:isSelected?'var(--teal-g)':'var(--bg3)',transition:'all .15s'}}>
+              <div style={{width:20,height:20,borderRadius:6,border:`2px solid ${isSelected?'var(--teal)':'var(--border)'}`,background:isSelected?'var(--teal)':'transparent',display:'flex',alignItems:'center',justifyContent:'center',flexShrink:0,transition:'all .15s'}}>
+                {isSelected&&<span style={{color:'white',fontSize:12,fontWeight:900}}>✓</span>}
+              </div>
+              <div style={{width:34,height:34,borderRadius:10,background:`${cat.color}22`,display:'flex',alignItems:'center',justifyContent:'center',fontSize:18,flexShrink:0}}>{cat.icon}</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:13}}>{t.title}</div>
+                <div style={{fontSize:11,color:'var(--text2)',marginTop:2,display:'flex',gap:6,flexWrap:'wrap'}}>
+                  <span style={{fontWeight:800,color:isSelected?'var(--teal)':'var(--text)'}}>{t.amount} {t.currency}</span>
+                  {needsConversion&&<span style={{color:'var(--gold)'}}>→ ≈ {Math.round(converted*100)/100} {form.currency}</span>}
+                  <span>{t.priority==='essential'?'🔴':t.priority==='comfort'?'🟡':'🟢'}</span>
+                  <span>{t.paymentMethod==='cash'?'💵':t.paymentMethod==='card'?'💳':'🏦'}</span>
+                </div>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {templates.length>0&&<div style={{padding:'12px 16px',borderTop:'1px solid var(--border)',background:'var(--bg3)'}}>
+        <div style={{display:'flex',justifyContent:'space-between',fontSize:12,fontWeight:700,marginBottom:12}}>
+          <span style={{color:'var(--text2)'}}>{chosen.length} {T('مصروف محدد','selected',language)}</span>
+          <span style={{color:'var(--teal)'}}>{T('الإجمالي:','Total:',language)} {Math.round(totalInBudgetCur*100)/100} {form.currency}</span>
+        </div>
+        <div style={{display:'flex',gap:8}}>
+          <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>setShowImport(false)}>{T('رجوع','Back',language)}</button>
+          <button className="btn btn-coral btn-sm" style={{flex:2,fontWeight:800}} disabled={!chosen.length} onClick={()=>handleSaveAndImport(chosen)}>
+            📥 {T(`حفظ الميزانية + استيراد ${chosen.length} مصروف`,`Save Budget + Import ${chosen.length} Expenses`,language)}
+          </button>
+        </div>
+      </div>}
+    </div></div>);
+  }
+
+  return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400,maxHeight:'90dvh',overflow:'auto'}}>
     <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)'}}><h3 style={{fontSize:16,fontWeight:800}}>{isE?T('تعديل ميزانية','Edit Budget',language):T('ميزانية جديدة','New Budget',language)}</h3></div>
     <div style={{padding:20,display:'flex',flexDirection:'column',gap:14}}>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('العنوان','Title',language)}</label><input className="field" value={form.title} onChange={e=>f('title',e.target.value)} placeholder={T('رحلة البرتغال، مصاريف رمضان...','Trip to Portugal, Ramadan...',language)}/></div>
       <div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('الأيقونة','Icon',language)}</label><IconPick icons={icons} sel={form.icon} onSel={v=>f('icon',v)}/></div>
       <div style={{display:'grid',gridTemplateColumns:'1fr auto',gap:8}}><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('المبلغ','Amount',language)}</label><input className="field" type="number" value={form.totalAmount} onChange={e=>f('totalAmount',e.target.value)} style={{fontSize:20,fontWeight:900}}/></div><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('العملة','Currency',language)}</label><select className="field" value={form.currency} onChange={e=>f('currency',e.target.value)}>{CURRENCIES.map(c=>(<option key={c.code} value={c.code}>{c.icon} {c.code}</option>))}</select></div></div>
       <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:8}}><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('من','From',language)}</label><input className="field" type="date" value={form.startDate} onChange={e=>f('startDate',e.target.value)}/></div><div><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('إلى','To',language)}</label><input className="field" type="date" value={form.endDate} onChange={e=>f('endDate',e.target.value)}/></div></div>
-      {/* Include in Reports Toggle */}
+
+      {/* Include in Reports */}
       <div onClick={()=>f('includeInReports',!incl)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:12,cursor:'pointer',background:incl?'var(--teal-g)':'var(--bg3)',border:`1px solid ${incl?'var(--teal)':'var(--border)'}`}}>
         <div style={{width:36,height:20,borderRadius:10,background:incl?'var(--teal)':'var(--border)',position:'relative',transition:'background .2s',flexShrink:0}}><div style={{width:16,height:16,borderRadius:8,background:'white',position:'absolute',top:2,transition:'left .2s',left:incl?'18px':'2px'}}/></div>
-        <div><div style={{fontWeight:700,fontSize:13,color:incl?'var(--teal)':'var(--text2)'}}>{incl?T('📊 تظهر في التقارير والداشبورد','📊 Included in reports & dashboard',language):T('👁️ مخفية من التقارير والداشبورد','👁️ Hidden from reports & dashboard',language)}</div><div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>{T('تحكم في ظهور مصاريفها في الإحصائيات','Control if this budget\'s expenses appear in analytics',language)}</div></div>
+        <div><div style={{fontWeight:700,fontSize:13,color:incl?'var(--teal)':'var(--text2)'}}>{incl?T('📊 تظهر في التقارير والداشبورد','📊 Included in reports & dashboard',language):T('👁️ مخفية من التقارير والداشبورد','👁️ Hidden from reports & dashboard',language)}</div><div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>{T('تحكم في ظهور مصاريفها في الإحصائيات','Control if expenses appear in analytics',language)}</div></div>
       </div>
+
       {isE&&<div onClick={()=>f('closed',!form.closed)} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:12,cursor:'pointer',background:form.closed?'var(--coral-g)':'var(--lime-g)',border:`1px solid ${form.closed?'var(--coral)':'var(--lime)'}`}}>
         <div style={{width:36,height:20,borderRadius:10,background:form.closed?'var(--coral)':'var(--lime)',position:'relative',transition:'background .2s'}}><div style={{width:16,height:16,borderRadius:8,background:'white',position:'absolute',top:2,transition:'left .2s',left:form.closed?'18px':'2px'}}/></div>
         <span style={{fontWeight:700,fontSize:13,color:form.closed?'var(--coral)':'var(--lime)'}}>{form.closed?T('🔒 مغلقة — المصاريف متوقفة','🔒 Closed — expenses frozen',language):T('🔓 مفتوحة — المصاريف مفعّلة','🔓 Open — expenses active',language)}</span>
       </div>}
+
+      {/* Recurring import CTA */}
+      {templates.length>0&&<div onClick={()=>{if(!form.title.trim()||!form.totalAmount){alert(T('يرجى تعبئة عنوان الميزانية والمبلغ أولاً','Please fill in the budget title and amount first',language));return;}setShowImport(true);}} style={{display:'flex',alignItems:'center',gap:12,padding:'12px 14px',borderRadius:12,cursor:'pointer',background:'var(--gold-g)',border:'2px solid var(--gold)',transition:'opacity .15s'}}>
+        <span style={{fontSize:26}}>📌</span>
+        <div style={{flex:1}}>
+          <div style={{fontWeight:800,fontSize:13,color:'var(--gold)'}}>{T(`استيراد المصاريف الثابتة (${templates.length} قوالب)`,`Import Fixed Expenses (${templates.length} templates)`,language)}</div>
+          <div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>{T('تُضاف بتاريخ اليوم مع تحويل العملة تلقائياً','Added today with auto currency conversion',language)}</div>
+        </div>
+        <span style={{fontSize:18,color:'var(--gold)'}}>›</span>
+      </div>}
+
+      {templates.length===0&&<div style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+        <span style={{fontSize:20}}>📌</span>
+        <div style={{fontSize:12,color:'var(--text2)'}}>{T('لا يوجد قوالب ثابتة بعد — أضفها من زر 📌 في شاشة المصاريف','No recurring templates yet — add them via 📌 in the expenses screen',language)}</div>
+      </div>}
     </div>
-    <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}><button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button><button className="btn btn-gold" onClick={()=>{if(!form.title.trim()||!form.totalAmount)return;onSave({...form,id:form.id||uid(),totalAmount:parseFloat(form.totalAmount),createdAt:form.createdAt||new Date().toISOString()});}}>💰 {T('حفظ','Save',language)}</button></div>
+    <div style={{padding:'16px 24px',borderTop:'1px solid var(--border)',display:'flex',gap:10,justifyContent:'flex-end'}}>
+      <button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button>
+      <button className="btn btn-gold" onClick={handleSaveOnly}>💰 {T('حفظ','Save',language)}</button>
+    </div>
   </div></div>);
 }
 
@@ -1522,6 +1629,291 @@ function ExpMonthlyBars({expenses,categories,language,toBase}){
         <span style={{fontSize:10,fontWeight:600,color:'var(--text2)'}}>{mName}</span>
       </div>);})}
   </div>);
+}
+
+// ========== BUDGET PDF REPORT ==========
+function generateBudgetPDF(b, bExps, cats, language){
+  const isAr = language==='ar';
+  const T2=(a,e)=>isAr?a:e;
+  const getCat=id=>cats.find(c=>c.id===id)||{icon:'❓',color:'#888',name:id,nameEn:id};
+  const fmtN=n=>Math.round(n).toLocaleString(isAr?'ar-SA':'en-US');
+
+  // Compute stats
+  const rates=getStoredRates().rates;
+  const expToBud=(e)=>{
+    if(e.currency===b.currency)return e.amount;
+    if(e.savedRates&&e.savedRates[b.currency])return e.amount*e.savedRates[b.currency];
+    return convertAmount(e.amount,e.currency,b.currency,rates);
+  };
+  const total=bExps.reduce((s,e)=>s+expToBud(e),0);
+  const pct=b.totalAmount?Math.round(total/b.totalAmount*100):0;
+  const remaining=b.totalAmount-total;
+
+  // By category
+  const byCat={};
+  bExps.forEach(e=>{const c=e.category;if(!byCat[c])byCat[c]={amount:0,count:0};byCat[c].amount+=expToBud(e);byCat[c].count++;});
+  const catEntries=Object.entries(byCat).sort((a,z)=>z[1].amount-a[1].amount);
+
+  // By payment
+  const byPay={cash:0,card:0,transfer:0};
+  bExps.forEach(e=>{const a=expToBud(e);if(e.paymentMethod==='card')byPay.card+=a;else if(e.paymentMethod==='transfer')byPay.transfer+=a;else byPay.cash+=a;});
+
+  // By day (for timeline)
+  const byDay={};
+  bExps.forEach(e=>{byDay[e.date]=(byDay[e.date]||0)+expToBud(e);});
+  const dayEntries=Object.entries(byDay).sort((a,z)=>a[0].localeCompare(z[0]));
+
+  // By priority
+  const byPri={essential:0,comfort:0,luxury:0,unset:0};
+  bExps.forEach(e=>{const p=e.priority||'unset';byPri[p]=(byPri[p]||0)+expToBud(e);});
+
+  // Cat colors for charts
+  const catColors=catEntries.map(([id])=>{const c=getCat(id);return c.color||'#888';});
+  const catLabels=catEntries.map(([id])=>{const c=getCat(id);return `${c.icon} ${isAr?c.name:c.nameEn}`;});
+  const catAmounts=catEntries.map(([,v])=>Math.round(v.amount));
+
+  const ringOffset=376-(376*(Math.min(pct,100)/100));
+  const reportDate=new Date().toLocaleDateString(isAr?'ar-SA':'en-US',{year:'numeric',month:'long',day:'numeric'});
+
+  const txRows=bExps.sort((a,z)=>new Date(a.date)-new Date(z.date)).map(e=>{
+    const cat=getCat(e.category);
+    const amt=expToBud(e);
+    const payLabel=e.paymentMethod==='card'?T2('بطاقة','Card'):e.paymentMethod==='transfer'?T2('تحويل','Transfer'):T2('نقد','Cash');
+    const payClass=e.paymentMethod==='card'?'payment-card':e.paymentMethod==='transfer'?'payment-transfer':'payment-cash';
+    const dateStr=new Date(e.date+'T12:00').toLocaleDateString(isAr?'ar-SA':'en-US',{day:'numeric',month:'short'});
+    return `<tr>
+      <td style="color:#64748b">${dateStr}</td>
+      <td>${e.title}</td>
+      <td><span class="tx-tag" style="background:${cat.color}22;color:${cat.color}">${cat.icon} ${isAr?cat.name:cat.nameEn}</span></td>
+      <td><span class="payment-badge ${payClass}">${payLabel}</span></td>
+      <td class="tx-amount">${fmtN(amt)} ${b.currency}</td>
+    </tr>`;
+  }).join('');
+
+  const catBarsHtml=catEntries.map(([id,v])=>{
+    const cat=getCat(id);
+    const p=total?((v.amount/total)*100).toFixed(1):0;
+    return `<div class="cat-item">
+      <div class="cat-header">
+        <span class="cat-name">${cat.icon} ${isAr?cat.name:cat.nameEn} <span style="color:#64748b;font-size:11px">(${v.count} ${T2('عملية','items')})</span></span>
+        <span class="cat-amount">${fmtN(v.amount)} ${b.currency} · ${p}%</span>
+      </div>
+      <div class="cat-bar-bg"><div class="cat-bar-fill" style="width:${p}%;background:${cat.color}"></div></div>
+    </div>`;
+  }).join('');
+
+  const html=`<!DOCTYPE html>
+<html lang="${isAr?'ar':'en'}" dir="${isAr?'rtl':'ltr'}">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0">
+<title>${T2('تحليل ميزانية','Budget Report')}: ${b.title}</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"><\/script>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+Arabic:wght@300;400;600;700&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box}
+:root{--bg:#0a0f1a;--surface:#111827;--surface2:#1a2235;--border:#1e2d45;--gold:#f5c842;--red:#ff4d6d;--green:#22c55e;--blue:#3b82f6;--cyan:#06b6d4;--purple:#8b5cf6;--orange:#f97316;--text:#e2e8f0;--muted:#64748b}
+body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:var(--text);min-height:100vh}
+.hero{background:linear-gradient(135deg,#0a0f1a 0%,#111827 40%,#0d1b2a 100%);border-bottom:1px solid var(--border);padding:48px 40px 40px;position:relative;overflow:hidden}
+.hero::before{content:'';position:absolute;top:-60px;right:-60px;width:300px;height:300px;background:radial-gradient(circle,rgba(245,200,66,.08) 0%,transparent 70%);pointer-events:none}
+.hero-grid{max-width:1100px;margin:0 auto;display:grid;grid-template-columns:1fr auto;gap:32px;align-items:center}
+.app-badge{display:inline-flex;align-items:center;gap:8px;background:rgba(245,200,66,.1);border:1px solid rgba(245,200,66,.3);padding:6px 14px;border-radius:100px;font-size:12px;color:var(--gold);margin-bottom:16px}
+.hero h1{font-size:32px;font-weight:700;color:#fff;line-height:1.2;margin-bottom:8px}
+.hero h1 span{color:var(--gold)}
+.hero-sub{font-size:14px;color:var(--muted)}
+.budget-ring{position:relative;width:130px;height:130px}
+.budget-ring svg{transform:rotate(-90deg);width:130px;height:130px}
+.ring-inner{position:absolute;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center}
+.ring-pct{font-size:24px;font-weight:700;color:var(--gold)}
+.ring-label{font-size:10px;color:var(--muted)}
+.container{max-width:1100px;margin:0 auto;padding:36px 40px}
+.kpi-grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:28px}
+.kpi{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:20px;position:relative;overflow:hidden}
+.kpi::before{content:'';position:absolute;bottom:0;left:0;right:0;height:3px}
+.kpi.gold::before{background:var(--gold)}.kpi.red::before{background:var(--red)}.kpi.green::before{background:var(--green)}.kpi.blue::before{background:var(--blue)}
+.kpi-icon{font-size:24px;margin-bottom:10px}
+.kpi-val{font-size:24px;font-weight:700;color:#fff;line-height:1}
+.kpi-val span{font-size:13px;font-weight:400;color:var(--muted);margin-right:3px}
+.kpi-label{font-size:12px;color:var(--muted);margin-top:5px}
+.kpi-sub{font-size:11px;color:var(--green);margin-top:3px;font-weight:500}
+.kpi-sub.bad{color:var(--red)}
+.charts-grid{display:grid;grid-template-columns:1fr 1fr;gap:20px;margin-bottom:28px}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:14px;padding:24px}
+.card.full{grid-column:1/-1}
+.card-header{display:flex;align-items:center;justify-content:space-between;margin-bottom:20px}
+.card-title{font-size:15px;font-weight:600;color:#fff}
+.card-badge{font-size:11px;padding:4px 10px;border-radius:100px;background:rgba(245,200,66,.1);color:var(--gold);border:1px solid rgba(245,200,66,.2)}
+.tx-table{width:100%;border-collapse:collapse;font-size:13px}
+.tx-table th{text-align:${isAr?'right':'left'};padding:12px 14px;color:var(--muted);font-weight:500;border-bottom:1px solid var(--border);font-size:12px}
+.tx-table td{padding:10px 14px;border-bottom:1px solid rgba(30,45,69,.5)}
+.tx-table tr:hover td{background:rgba(255,255,255,.02)}
+.tx-tag{padding:2px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.payment-badge{padding:3px 8px;border-radius:6px;font-size:11px;font-weight:600}
+.payment-cash{background:#22c55e22;color:#22c55e}
+.payment-card{background:#3b82f622;color:#3b82f6}
+.payment-transfer{background:#8b5cf622;color:#8b5cf6}
+.tx-amount{font-weight:700;color:#fff;text-align:${isAr?'right':'left'}}
+.cat-item{margin-bottom:12px}
+.cat-header{display:flex;justify-content:space-between;margin-bottom:6px;font-size:13px}
+.cat-name{font-weight:600;color:var(--text)}
+.cat-amount{font-weight:600;color:var(--muted)}
+.cat-bar-bg{height:8px;background:var(--border);border-radius:4px;overflow:hidden}
+.cat-bar-fill{height:100%;border-radius:4px;transition:width .8s ease}
+.footer{text-align:center;padding:32px;color:var(--muted);font-size:12px;border-top:1px solid var(--border);margin-top:8px}
+@keyframes fadeUp{from{opacity:0;transform:translateY(16px)}to{opacity:1;transform:translateY(0)}}
+.kpi{animation:fadeUp .5s ease both}
+.kpi:nth-child(1){animation-delay:.1s}.kpi:nth-child(2){animation-delay:.2s}.kpi:nth-child(3){animation-delay:.3s}.kpi:nth-child(4){animation-delay:.4s}
+@media print{
+  body{background:#fff!important;color:#111!important}
+  .hero{background:#f8f9fa!important;border-color:#e5e7eb!important}
+  .card,.kpi{background:#fff!important;border-color:#e5e7eb!important;box-shadow:0 1px 3px rgba(0,0,0,.1)}
+  .app-badge{background:#fef9e7!important;color:#92400e!important;border-color:#fde68a!important}
+  canvas{max-height:220px!important}
+  .no-print{display:none!important}
+}
+</style>
+</head>
+<body>
+<div class="hero">
+  <div class="hero-grid">
+    <div>
+      <div class="app-badge">⚡ متقن · ${T2('تقرير ميزانية','Budget Report')}</div>
+      <h1>${b.icon} <span>${b.title}</span></h1>
+      <p class="hero-sub">${T2('تاريخ التقرير','Report Date')}: ${reportDate} · ${T2('العملة','Currency')}: ${b.currency}</p>
+      ${b.startDate?`<p class="hero-sub" style="margin-top:6px">📅 ${b.startDate}${b.endDate?' → '+b.endDate:''}</p>`:''}
+    </div>
+    <div class="budget-ring">
+      <svg viewBox="0 0 130 130">
+        <circle cx="65" cy="65" r="55" fill="none" stroke="#1e2d45" stroke-width="10"/>
+        <circle cx="65" cy="65" r="55" fill="none" stroke="${pct>=100?'#ff4d6d':pct>=80?'#f5c842':'#22c55e'}" stroke-width="10" stroke-linecap="round"
+          stroke-dasharray="345.4" stroke-dashoffset="${345.4-(345.4*(Math.min(pct,100)/100))}"
+          style="transition:stroke-dashoffset 1.5s ease"/>
+      </svg>
+      <div class="ring-inner">
+        <span class="ring-pct">${pct}%</span>
+        <span class="ring-label">${T2('مصروف','Spent')}</span>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="container">
+  <div class="kpi-grid">
+    <div class="kpi gold">
+      <div class="kpi-icon">💰</div>
+      <div class="kpi-val"><span>${b.currency}</span>${fmtN(b.totalAmount)}</div>
+      <div class="kpi-label">${T2('إجمالي الميزانية','Total Budget')}</div>
+    </div>
+    <div class="kpi red">
+      <div class="kpi-icon">📤</div>
+      <div class="kpi-val"><span>${b.currency}</span>${fmtN(total)}</div>
+      <div class="kpi-label">${T2('إجمالي المصروف','Total Spent')}</div>
+      <div class="kpi-sub ${pct>=100?'bad':''}">${pct}% ${T2('من الميزانية','of budget')}</div>
+    </div>
+    <div class="kpi ${remaining>=0?'green':'red'}">
+      <div class="kpi-icon">${remaining>=0?'✅':'⚠️'}</div>
+      <div class="kpi-val"><span>${b.currency}</span>${fmtN(Math.abs(remaining))}</div>
+      <div class="kpi-label">${remaining>=0?T2('المتبقي','Remaining'):T2('تجاوز الميزانية','Over Budget')}</div>
+    </div>
+    <div class="kpi blue">
+      <div class="kpi-icon">🧾</div>
+      <div class="kpi-val">${bExps.length}</div>
+      <div class="kpi-label">${T2('عدد العمليات','Transactions')}</div>
+      <div class="kpi-sub">${T2('متوسط','Avg')}: ${fmtN(bExps.length?total/bExps.length:0)} ${b.currency}</div>
+    </div>
+  </div>
+
+  <div class="charts-grid">
+    <div class="card">
+      <div class="card-header"><span class="card-title">🥧 ${T2('حسب التصنيف','By Category')}</span><span class="card-badge">${catEntries.length} ${T2('تصنيف','categories')}</span></div>
+      <canvas id="pieChart" height="220"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📊 ${T2('أعلى التصنيفات','Top Categories')}</span></div>
+      <canvas id="barChart" height="220"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">💳 ${T2('طريقة الدفع','Payment Methods')}</span></div>
+      <canvas id="payChart" height="220"></canvas>
+    </div>
+    <div class="card">
+      <div class="card-header"><span class="card-title">📈 ${T2('المصاريف اليومية','Daily Spending')}</span></div>
+      <canvas id="timelineChart" height="220"></canvas>
+    </div>
+  </div>
+
+  <div class="card full" style="margin-bottom:20px">
+    <div class="card-header"><span class="card-title">📋 ${T2('تفصيل حسب التصنيف','Category Breakdown')}</span></div>
+    <div id="catBars">${catBarsHtml}</div>
+  </div>
+
+  <div class="card full" style="margin-bottom:20px">
+    <div class="card-header">
+      <span class="card-title">🧾 ${T2('سجل العمليات','Transactions')}</span>
+      <span class="card-badge">${bExps.length} ${T2('عملية','items')}</span>
+    </div>
+    <div style="overflow-x:auto">
+      <table class="tx-table">
+        <thead><tr>
+          <th>${T2('التاريخ','Date')}</th>
+          <th>${T2('الوصف','Description')}</th>
+          <th>${T2('التصنيف','Category')}</th>
+          <th>${T2('الدفع','Payment')}</th>
+          <th>${T2('المبلغ','Amount')}</th>
+        </tr></thead>
+        <tbody>${txRows}</tbody>
+      </table>
+    </div>
+  </div>
+
+  <div style="text-align:center;margin-bottom:20px" class="no-print">
+    <button onclick="window.print()" style="background:linear-gradient(135deg,#f5c842,#e8a800);color:#0a0f1a;border:none;padding:14px 40px;border-radius:12px;font-size:15px;font-weight:700;cursor:pointer;font-family:inherit">
+      🖨️ ${T2('طباعة / حفظ PDF','Print / Save as PDF')}
+    </button>
+  </div>
+</div>
+
+<div class="footer">
+  ${T2('تم إنشاء هذا التقرير بواسطة','Generated by')} <strong style="color:var(--gold)">متقن</strong> · ${reportDate}
+</div>
+
+<script>
+const catColors=${JSON.stringify(catColors)};
+const catLabels=${JSON.stringify(catLabels)};
+const catAmounts=${JSON.stringify(catAmounts)};
+const total=${Math.round(total)};
+const font={family:'IBM Plex Sans Arabic'};
+
+new Chart(document.getElementById('pieChart'),{
+  type:'doughnut',
+  data:{labels:catLabels,datasets:[{data:catAmounts,backgroundColor:catColors.map(c=>c+'99'),borderColor:catColors,borderWidth:2,hoverOffset:6}]},
+  options:{responsive:true,cutout:'62%',plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font,padding:8}},tooltip:{callbacks:{label:ctx=>' '+ctx.label+': '+ctx.parsed.toLocaleString()+' ('+((ctx.parsed/total)*100).toFixed(1)+'%)'}}}}
+});
+
+const top8=[...catLabels.map((l,i)=>({l,a:catAmounts[i],c:catColors[i]}))].sort((a,z)=>z.a-a.a).slice(0,8);
+new Chart(document.getElementById('barChart'),{
+  type:'bar',
+  data:{labels:top8.map(x=>x.l),datasets:[{label:'${b.currency}',data:top8.map(x=>x.a),backgroundColor:top8.map(x=>x.c+'99'),borderColor:top8.map(x=>x.c),borderWidth:2,borderRadius:6}]},
+  options:{indexAxis:'y',responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.parsed.x.toLocaleString()+' ${b.currency}'}}},scales:{x:{grid:{color:'#1e2d45'},ticks:{color:'#64748b',font}},y:{grid:{display:false},ticks:{color:'#94a3b8',font}}}}
+});
+
+new Chart(document.getElementById('payChart'),{
+  type:'doughnut',
+  data:{labels:['${T2('نقد','Cash')}','${T2('بطاقة','Card')}','${T2('تحويل','Transfer')}'],datasets:[{data:[${Math.round(byPay.cash)},${Math.round(byPay.card)},${Math.round(byPay.transfer)}],backgroundColor:['#22c55e99','#3b82f699','#8b5cf699'],borderColor:['#22c55e','#3b82f6','#8b5cf6'],borderWidth:2,hoverOffset:6}]},
+  options:{responsive:true,cutout:'60%',plugins:{legend:{position:'bottom',labels:{color:'#94a3b8',font,padding:10}},tooltip:{callbacks:{label:ctx=>' '+ctx.parsed.toLocaleString()+' ${b.currency}'}}}}
+});
+
+new Chart(document.getElementById('timelineChart'),{
+  type:'line',
+  data:{labels:${JSON.stringify(dayEntries.map(([d])=>d.slice(5)))},datasets:[{label:'${T2('يومي','Daily')}',data:${JSON.stringify(dayEntries.map(([,v])=>Math.round(v)))},borderColor:'#f5c842',backgroundColor:'rgba(245,200,66,0.08)',fill:true,tension:.4,pointBackgroundColor:'#f5c842',pointRadius:4,pointHoverRadius:7}]},
+  options:{responsive:true,plugins:{legend:{display:false},tooltip:{callbacks:{label:ctx=>' '+ctx.parsed.y.toLocaleString()+' ${b.currency}'}}},scales:{x:{grid:{color:'#1e2d45'},ticks:{color:'#64748b',font,maxRotation:45}},y:{grid:{color:'#1e2d45'},ticks:{color:'#64748b',font}}}}
+});
+<\/script>
+</body></html>`;
+
+  const win=window.open('','_blank');
+  win.document.write(html);
+  win.document.close();
 }
 
 // ========== RECURRING TEMPLATES HELPERS ==========
@@ -1581,9 +1973,9 @@ function RecurringModal({language,categories,onClose,onImport}){
       <h3 style={{fontSize:16,fontWeight:800}}>📌 {T('قوالب المصاريف الثابتة','Recurring Expense Templates',language)}</h3>
       <button className="btn btn-ghost btn-icon-xs" onClick={onClose}>✕</button>
     </div>
-    <div style={{padding:'14px 16px',background:'var(--gold-g)',borderBottom:'1px solid var(--gold)',display:'flex',gap:8,alignItems:'flex-start'}}>
+    <div style={{padding:'14px 16px',background:'var(--teal-g)',borderBottom:'1px solid var(--teal)',display:'flex',gap:8,alignItems:'flex-start'}}>
       <span style={{fontSize:18}}>💡</span>
-      <span style={{fontSize:12,color:'var(--gold)',fontWeight:600,lineHeight:1.5}}>{T('أضف هنا المصاريف الثابتة الشهرية (إيجار، نت، راتب السائق...) ثم استوردها دفعة واحدة عند بدء كل شهر.','Add your fixed monthly expenses here (rent, internet, subscriptions...) then import them all at the start of each month.',language)}</span>
+      <span style={{fontSize:12,color:'var(--teal)',fontWeight:600,lineHeight:1.5}}>{T('هنا تدير قوالب مصاريفك الثابتة. لاستيرادها إلى ميزانية، افتح الميزانية واضغط زر 📌 بداخلها.','Manage your fixed expense templates here. To import them into a budget, open the budget and tap the 📌 button inside it.',language)}</span>
     </div>
     <div style={{padding:'14px 16px',display:'flex',flexDirection:'column',gap:10}}>
       {!templates.length&&<div style={{textAlign:'center',padding:24,color:'var(--text2)'}}><div style={{fontSize:40}}>📌</div><p style={{fontSize:13,marginTop:8}}>{T('لا يوجد قوالب بعد','No templates yet',language)}</p></div>}
@@ -1604,8 +1996,8 @@ function RecurringModal({language,categories,onClose,onImport}){
       );})}
     </div>
     <div style={{padding:'14px 16px',borderTop:'1px solid var(--border)',display:'flex',gap:8}}>
-      <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={startNew}>➕ {T('قالب جديد','New Template',language)}</button>
-      {templates.length>0&&<button className="btn btn-coral btn-sm" style={{flex:1}} onClick={()=>{onImport(templates);onClose();}}>📥 {T('استيراد لهذا الشهر','Import This Month',language)}</button>}
+      <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={onClose}>{T('إغلاق','Close',language)}</button>
+      <button className="btn btn-teal btn-sm" style={{flex:1}} onClick={startNew}>➕ {T('قالب جديد','New Template',language)}</button>
     </div>
   </div></div>);
 }
@@ -1648,10 +2040,11 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
   const allExpRaw=data.expenses||[];
   const budgets=data.budgets||[];
   const closedBudgetIds=useMemo(()=>new Set(budgets.filter(b=>b.closed).map(b=>b.id)),[budgets]);
-  const excludedFromReportIds=useMemo(()=>new Set(budgets.filter(b=>b.includeInReports===false).map(b=>b.id)),[budgets]);
+  const hiddenFromReportIds=useMemo(()=>new Set(budgets.filter(b=>b.closed||b.includeInReports===false).map(b=>b.id)),[budgets]);
+  // allExp: used for the expense LIST display only (excludes closed)
   const allExp=useMemo(()=>allExpRaw.filter(e=>!e.budgetId||!closedBudgetIds.has(e.budgetId)),[allExpRaw,closedBudgetIds]);
-  // analyticsExp: excludes budgets with includeInReports=false (for dashboard/smart analysis)
-  const analyticsExp=useMemo(()=>allExp.filter(e=>!e.budgetId||!excludedFromReportIds.has(e.budgetId)),[allExp,excludedFromReportIds]);
+  // analyticsExp: used for ALL analytics/charts/totals (excludes closed + includeInReports=false)
+  const analyticsExp=useMemo(()=>allExpRaw.filter(e=>!e.budgetId||!hiddenFromReportIds.has(e.budgetId)),[allExpRaw,hiddenFromReportIds]);
 
   const filtered=useMemo(()=>{
     const now=new Date();let from,to;
@@ -1663,7 +2056,18 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
     return allExp.filter(e=>{const d=new Date(e.date);return d>=from&&d<=to;}).filter(e=>!expSearch||((e.title||'').toLowerCase().includes(expSearch.toLowerCase()))).sort((a,b)=>new Date(b.date)-new Date(a.date));
   },[allExp,dateRange,customFrom,customTo,expSearch]);
 
-  const totalFiltered=useMemo(()=>filtered.reduce((s,e)=>s+toBase(e.amount,e.currency),0),[filtered,toBase]);
+  // analyticsFiltered: same date range as filtered but from analyticsExp (for charts/totals)
+  const analyticsFiltered=useMemo(()=>{
+    const now=new Date();let from,to;
+    if(dateRange==='week'){from=new Date(now);from.setDate(from.getDate()-7);to=now;}
+    else if(dateRange==='month'){from=new Date(now.getFullYear(),now.getMonth(),1);to=now;}
+    else if(dateRange==='year'){from=new Date(now.getFullYear(),0,1);to=now;}
+    else if(dateRange==='custom'&&customFrom&&customTo){from=new Date(customFrom);to=new Date(customTo);to.setHours(23,59,59);}
+    else{from=new Date(0);to=now;}
+    return analyticsExp.filter(e=>{const d=new Date(e.date);return d>=from&&d<=to;});
+  },[analyticsExp,dateRange,customFrom,customTo]);
+
+  const totalFiltered=useMemo(()=>analyticsFiltered.reduce((s,e)=>s+toBase(e.amount,e.currency),0),[analyticsFiltered,toBase]);
   const curMonth=localDS().slice(0,7);
   const monthTotal=useMemo(()=>analyticsExp.filter(e=>e.date.startsWith(curMonth)).reduce((s,e)=>s+toBase(e.amount,e.currency),0),[analyticsExp,curMonth,toBase]);
 
@@ -1755,7 +2159,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
       const upcomingSoon=allExp.filter(e=>{if(!e.nextPaymentDate)return false;const d=new Date(e.nextPaymentDate+'T12:00');const diff=(d-now)/(1000*60*60*24);return diff>=0&&diff<=2;});
       const curM=now.toISOString().slice(0,7);
       const catsWithBudget=(cats||[]).filter(c=>c.plannedBudget&&parseFloat(c.plannedBudget)>0);
-      const byCategory={};allExp.filter(e=>e.date.startsWith(curM)).forEach(e=>{byCategory[e.category]=(byCategory[e.category]||0)+toBase(e.amount,e.currency);});
+      const byCategory={};analyticsExp.filter(e=>e.date.startsWith(curM)).forEach(e=>{byCategory[e.category]=(byCategory[e.category]||0)+toBase(e.amount,e.currency);});
       const overBudget=catsWithBudget.filter(c=>(byCategory[c.id]||0)>parseFloat(c.plannedBudget)*1.05);
       if(!upcomingToday.length&&!overBudget.length)return null;
       return(<div style={{display:'flex',flexDirection:'column',gap:6}}>
@@ -1801,7 +2205,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
 
     <div className="exp-summary">
       <div className="exp-summary-card"><div className="exp-lbl">{T('هذا الشهر','This Month',language)} ({baseCur})</div><div className="exp-val" style={{color:'var(--coral)'}}>{fmtMoney(monthTotal)}</div></div>
-      <div className="exp-summary-card"><div className="exp-lbl">{T('الفترة المحددة','Selected Period',language)} ({baseCur})</div><div className="exp-val" style={{color:'var(--teal)'}}>{fmtMoney(totalFiltered)}</div><div className="exp-lbl">{filtered.length} {T('عملية','transactions',language)}</div></div>
+      <div className="exp-summary-card"><div className="exp-lbl">{T('الفترة المحددة','Selected Period',language)} ({baseCur})</div><div className="exp-val" style={{color:'var(--teal)'}}>{fmtMoney(totalFiltered)}</div><div className="exp-lbl">{analyticsFiltered.length} {T('عملية','transactions',language)}</div></div>
     </div>
 
     <div className="card" style={{padding:14}}>
@@ -1809,10 +2213,10 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
       {dateRange==='custom'&&<div style={{display:'flex',gap:8,marginBottom:10}}><input className="field" type="date" value={customFrom} onChange={e=>setCustomFrom(e.target.value)} style={{flex:1,fontSize:12}}/><input className="field" type="date" value={customTo} onChange={e=>setCustomTo(e.target.value)} style={{flex:1,fontSize:12}}/></div>}
       <div className="exp-tabs">{chartTabs.map(t=>(<div key={t.id} className={`exp-tab ${chartTab===t.id?'active':''}`} onClick={()=>setChartTab(t.id)}>{t.icon} {t.l}</div>))}</div>
       <div className="exp-chart-wrap">
-        {chartTab==='pie'&&<ExpPieChart expenses={filtered} categories={cats} language={language} toBase={toBase}/>}
-        {chartTab==='trend'&&<ExpTrendLine expenses={filtered} language={language} toBase={toBase}/>}
-        {chartTab==='bars'&&<ExpMonthlyBars expenses={allExp} categories={cats} language={language} toBase={toBase}/>}
-        {chartTab==='table'&&(<div style={{width:'100%',maxHeight:300,overflowY:'auto'}}><table style={{width:'100%',fontSize:12,borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'2px solid var(--border)'}}><th style={{textAlign:'start',padding:6,fontWeight:700}}>{T('التصنيف','Category',language)}</th><th style={{textAlign:'start',padding:6,fontWeight:700}}>{T('المبلغ','Amount',language)} ({baseCur})</th><th style={{textAlign:'start',padding:6,fontWeight:700}}>%</th></tr></thead><tbody>{(()=>{const byC={};filtered.forEach(e=>{byC[e.category]=(byC[e.category]||0)+toBase(e.amount,e.currency);});return Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([cid,amt])=>{const cat=getCat(cid);return(<tr key={cid} style={{borderBottom:'1px solid var(--border)'}}><td style={{padding:6}}>{cat.icon} {language==='ar'?cat.name:cat.nameEn}</td><td style={{padding:6,fontWeight:700}}>{fmtMoney(amt)}</td><td style={{padding:6,color:'var(--text2)'}}>{totalFiltered?Math.round(amt/totalFiltered*100):0}%</td></tr>);});})()}</tbody></table></div>)}
+        {chartTab==='pie'&&<ExpPieChart expenses={analyticsFiltered} categories={cats} language={language} toBase={toBase}/>}
+        {chartTab==='trend'&&<ExpTrendLine expenses={analyticsFiltered} language={language} toBase={toBase}/>}
+        {chartTab==='bars'&&<ExpMonthlyBars expenses={analyticsExp} categories={cats} language={language} toBase={toBase}/>}
+        {chartTab==='table'&&(<div style={{width:'100%',maxHeight:300,overflowY:'auto'}}><table style={{width:'100%',fontSize:12,borderCollapse:'collapse'}}><thead><tr style={{borderBottom:'2px solid var(--border)'}}><th style={{textAlign:'start',padding:6,fontWeight:700}}>{T('التصنيف','Category',language)}</th><th style={{textAlign:'start',padding:6,fontWeight:700}}>{T('المبلغ','Amount',language)} ({baseCur})</th><th style={{textAlign:'start',padding:6,fontWeight:700}}>%</th></tr></thead><tbody>{(()=>{const byC={};analyticsFiltered.forEach(e=>{byC[e.category]=(byC[e.category]||0)+toBase(e.amount,e.currency);});return Object.entries(byC).sort((a,b)=>b[1]-a[1]).map(([cid,amt])=>{const cat=getCat(cid);return(<tr key={cid} style={{borderBottom:'1px solid var(--border)'}}><td style={{padding:6}}>{cat.icon} {language==='ar'?cat.name:cat.nameEn}</td><td style={{padding:6,fontWeight:700}}>{fmtMoney(amt)}</td><td style={{padding:6,color:'var(--text2)'}}>{totalFiltered?Math.round(amt/totalFiltered*100):0}%</td></tr>);});})()}</tbody></table></div>)}
         {chartTab==='smart'&&<SmartAnalysis expenses={analyticsExp} categories={cats} language={language} toBase={toBase} baseCur={baseCur}/>}
         {chartTab==='budgets'&&(<div style={{width:'100%'}}>{!budgets.length?<p style={{textAlign:'center',color:'var(--text2)',padding:20}}>{T('لا ميزانيات — أضف من ⚙️','No budgets — add from ⚙️',language)}</p>:selBudget?(()=>{
           const b=budgets.find(x=>x.id===selBudget);if(!b)return null;
@@ -1837,8 +2241,8 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
                 {!b.closed&&<button className="btn btn-coral btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency})}>+ {T('مصروف','Expense',language)}</button>}
               </div>
             </div>
-            <div style={{marginBottom:10}}>
-              <button className="btn btn-gold btn-sm" style={{width:'100%',fontSize:12}} onClick={()=>{
+            <div style={{marginBottom:10,display:'flex',gap:8}}>
+              <button className="btn btn-gold btn-sm" style={{flex:1,fontSize:12}} onClick={()=>{
                   const bExps2=allExpRaw.filter(e=>e.budgetId===b.id).sort((a,c)=>new Date(a.date)-new Date(c.date));
                   const hdr=[[T('تقرير ميزانية','Budget Report',language)+': '+b.title],[T('إجمالي الميزانية','Total Budget',language)+': '+b.totalAmount+' '+b.currency],[T('تاريخ التقرير','Report Date',language)+': '+new Date().toLocaleDateString(language==='ar'?'ar-SA':'en-US')],[]];
                   const cols=[T('التاريخ','Date',language),T('التصنيف','Category',language),T('الوصف','Description',language),T('المبلغ الأصلي','Original Amount',language),T('العملة','Currency',language),T('سعر التحويل','Exchange Rate',language),T('مصدر السعر','Rate Source',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('طريقة الدفع','Payment',language),T('ملاحظات','Notes',language)];
@@ -1867,7 +2271,11 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
                   XLSX.utils.book_append_sheet(wb2,ws2,T('ملخص','Summary',language));
                   XLSX.writeFile(wb2,`budget-${b.title}-${localDS()}.xlsx`);
                   toast(T('تم تصدير الميزانية 📤','Budget exported 📤',language));
-                }}>📤 {T('تصدير الميزانية لإكسل','Export Budget to Excel',language)}</button>
+                }}>📤 {T('إكسل','Excel',language)}</button>
+              <button className="btn btn-coral btn-sm" style={{flex:1,fontSize:12}} onClick={()=>{
+                  const bExps=allExpRaw.filter(e=>e.budgetId===b.id);
+                  generateBudgetPDF(b,bExps,cats,language);
+                }}>📄 {T('تقرير PDF','PDF Report',language)}</button>
             </div>
 
             <div className="exp-budget-card" style={{marginBottom:14}}>
@@ -1934,7 +2342,39 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
 
     {expModal&&<ExpenseModal expense={expModal} categories={cats} budgets={budgets} language={language} onSave={e=>{onSaveExpense(e);setExpModal(null);}} onClose={()=>setExpModal(null)}/>}
     {catModal&&<CategoryModal category={catModal} language={language} onSave={c=>{onSaveCategory(c);setCatModal(null);}} onClose={()=>setCatModal(null)}/>}
-    {budModal&&<BudgetModal budget={budModal} language={language} onSave={b=>{onSaveBudget(b);setBudModal(null);}} onClose={()=>setBudModal(null)}/>}
+    {budModal&&<BudgetModal budget={budModal} language={language} categories={cats}
+      onSave={b=>{onSaveBudget(b);setBudModal(null);}}
+      onSaveAndImport={async(b,tpls)=>{
+        // 1. Save budget first and WAIT for it to be in DB
+        await onSaveBudget(b,true);
+        // 2. Import each template silently, sequentially
+        const today=localDS();
+        const existingTitles=allExpRaw.filter(e=>e.date.startsWith(today.slice(0,7))).map(e=>e.title.trim().toLowerCase());
+        const rates=getStoredRates().rates;
+        let imported=0;
+        for(const t of tpls){
+          if(existingTitles.includes((t.title||'').trim().toLowerCase()))continue;
+          const savedRates={};
+          CURRENCIES.forEach(c=>{if(c.code!==t.currency){const fr=rates[t.currency]||1;const tr=rates[c.code]||1;savedRates[c.code]=Math.round((tr/fr)*1000000)/1000000;}});
+          await onSaveExpense({
+            ...t,
+            id:uid(),
+            date:today,
+            budgetId:b.id,
+            savedRates,
+            savedRateDate:new Date().toISOString(),
+            createdAt:new Date().toISOString(),
+            updatedAt:new Date().toISOString()
+          },true); // silent=true, no individual toasts
+          imported++;
+        }
+        setBudModal(null);
+        toast(imported>0
+          ?T(`✅ تم حفظ الميزانية واستيراد ${imported} مصروف ثابت`,`✅ Budget saved + ${imported} recurring expenses imported`,language)
+          :T('✅ تم حفظ الميزانية — لا مصاريف جديدة (موجودة مسبقاً)','✅ Budget saved — no new expenses (already added this month)',language)
+        );
+      }}
+      onClose={()=>setBudModal(null)}/>}
     {recurModal&&<RecurringModal language={language} categories={cats} onClose={()=>setRecurModal(false)} onImport={handleImportRecurring}/>}
   </div>);
 }
@@ -2910,14 +3350,14 @@ function App(){
   };if(data.goals.length||data.expenses?.length||data.notes?.length)setConfirm({message:T('سيتم استبدال كل البيانات. متابعة؟','Replace ALL data? This cannot be undone.',lang),onOk:async()=>{await doIt();setConfirm(null);}});else await doIt();}catch(e){toast(T('خطأ في ملف الاستيراد','Invalid backup file',lang),'error');}};inp.click();},[data,lang,load,toast]);
 
   // Expense handlers
-  const handleSaveExpense=useCallback(async(e)=>{await dPut('expenses',e);await load();toast(T('تم حفظ المصروف 💰','Expense saved 💰',lang));
+  const handleSaveExpense=useCallback(async(e,silent=false)=>{await dPut('expenses',e);await load();if(!silent)toast(T('تم حفظ المصروف 💰','Expense saved 💰',lang));
     // Budget warning using saved rates
-    if(e.budgetId){const allE=await dAll('expenses');const b=(await dAll('budgets')).find(b=>b.id===e.budgetId);if(b){const r=getStoredRates().rates;const spent=allE.filter(x=>x.budgetId===b.id).reduce((s,x)=>s+convertWithSavedRate(x,b.currency,r),0);const pct=b.totalAmount?spent/b.totalAmount*100:0;if(pct>=100)toast(T(`🔴 تجاوزت ميزانية "${b.title}"!`,`🔴 Over budget "${b.title}"!`,lang),'error');else if(pct>=80)toast(T(`⚠️ وصلت ${Math.round(pct)}% من "${b.title}"`,`⚠️ ${Math.round(pct)}% of "${b.title}"`,lang),'warning');}}
+    if(e.budgetId&&!silent){const allE=await dAll('expenses');const b=(await dAll('budgets')).find(b=>b.id===e.budgetId);if(b){const r=getStoredRates().rates;const spent=allE.filter(x=>x.budgetId===b.id).reduce((s,x)=>s+convertWithSavedRate(x,b.currency,r),0);const pct=b.totalAmount?spent/b.totalAmount*100:0;if(pct>=100)toast(T(`🔴 تجاوزت ميزانية "${b.title}"!`,`🔴 Over budget "${b.title}"!`,lang),'error');else if(pct>=80)toast(T(`⚠️ وصلت ${Math.round(pct)}% من "${b.title}"`,`⚠️ ${Math.round(pct)}% of "${b.title}"`,lang),'warning');}}
   },[load,toast,lang]);
   const handleDeleteExpense=useCallback((e)=>{setConfirm({message:T(`حذف "${e.title}"؟`,`Delete "${e.title}"?`,lang),onOk:async()=>{await dDel('expenses',e.id);await load();toast(T('تم الحذف','Deleted',lang));setConfirm(null);}});},[lang,load,toast]);
   const handleSaveCategory=useCallback(async(c)=>{await dPut('categories',c);await load();toast(T('تم حفظ التصنيف','Category saved',lang));},[load,toast,lang]);
   const handleDeleteCategory=useCallback((c)=>{setConfirm({message:T(`حذف تصنيف "${c.name}"؟`,`Delete category "${c.nameEn}"?`,lang),onOk:async()=>{await dDel('categories',c.id);await load();toast(T('تم الحذف','Deleted',lang));setConfirm(null);}});},[lang,load,toast]);
-  const handleSaveBudget=useCallback(async(b)=>{await dPut('budgets',b);await load();toast(T('تم حفظ الميزانية','Budget saved',lang));},[load,toast,lang]);
+  const handleSaveBudget=useCallback(async(b,silent=false)=>{await dPut('budgets',b);await load();if(!silent)toast(T('تم حفظ الميزانية','Budget saved',lang));},[load,toast,lang]);
   const handleDeleteBudget=useCallback((b)=>{const bExps=(data.expenses||[]).filter(e=>e.budgetId===b.id);if(bExps.length>0){toast(T(`لا يمكن حذف الميزانية — فيها ${bExps.length} مصروف ⚠️`,`Cannot delete budget — has ${bExps.length} expenses ⚠️`,lang));return;}setConfirm({message:T(`حذف ميزانية "${b.title}"؟`,`Delete budget "${b.title}"?`,lang),onOk:async()=>{await dDel('budgets',b.id);await load();toast(T('تم الحذف','Deleted',lang));setConfirm(null);}});},[lang,data,load,toast]);
 
   // Note handlers
