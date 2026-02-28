@@ -143,9 +143,13 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 .exp-tabs{display:flex;gap:4px;margin-bottom:14px;overflow-x:auto;padding-bottom:4px}
 .exp-tab{padding:8px 16px;border-radius:12px;font-size:12px;font-weight:700;cursor:pointer;white-space:nowrap;border:1px solid var(--border);background:var(--bg3);color:var(--text2);transition:all .2s}
 .exp-tab.active{background:var(--coral);color:white;border-color:var(--coral)}
-.exp-item{display:flex;align-items:center;gap:10px;padding:12px 0;border-bottom:1px solid var(--border)}
-.exp-cat-dot{width:40px;height:40px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:20px;flex-shrink:0}
+.exp-item{display:flex;flex-direction:column;padding:10px 0;border-bottom:1px solid var(--border);cursor:pointer;transition:background .1s}
+.exp-item:active{background:var(--bg3)}
+.exp-item-row{display:flex;align-items:center;gap:10px}
+.exp-cat-dot{width:38px;height:38px;border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0}
 .exp-amount{font-weight:800;font-size:15px;white-space:nowrap}
+.exp-item-actions{display:flex;gap:8px;padding:6px 0 2px 50px;animation:fadeIn .15s ease}
+[dir="ltr"] .exp-item-actions{padding:6px 50px 2px 0}
 .exp-date-group{font-size:12px;font-weight:700;color:var(--text2);padding:10px 0 4px;border-bottom:2px solid var(--border)}
 .exp-chart-wrap{padding:16px;min-height:200px;display:flex;align-items:center;justify-content:center}
 .exp-pie-legend{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:12px}
@@ -263,6 +267,17 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 [dir="rtl"] .pomo-float{left:16px}
 [dir="ltr"] .pomo-float{right:16px}
 @media(min-width:768px){.pomo-float{bottom:20px}}
+/* FAB */
+.exp-fab{position:fixed;bottom:90px;z-index:46;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+[dir="rtl"] .exp-fab{right:16px}
+[dir="ltr"] .exp-fab{left:16px}
+.exp-fab-main{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 20px rgba(0,0,0,.35);transition:all .25s cubic-bezier(.4,0,.2,1);background:linear-gradient(135deg,#FF6B6B,#EE5A24);color:white}
+.exp-fab-main.open{transform:rotate(45deg);background:linear-gradient(135deg,#555,#333)}
+.exp-fab-option{display:flex;align-items:center;gap:10px;opacity:0;transform:translateY(14px) scale(.9);transition:all .2s cubic-bezier(.4,0,.2,1);pointer-events:none}
+.exp-fab-option.visible{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
+.exp-fab-option button{height:42px;padding:0 16px;border-radius:50px;border:none;cursor:pointer;font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);font-family:inherit;white-space:nowrap}
+.exp-fab-label{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);color:var(--text);white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+/* Expense item tap-to-expand (styles in main CSS block) */
 .pomo-mini{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--coral),#EE5A24);color:white;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 24px var(--coral-g);font-size:22px;border:none;transition:all .2s}
 .pomo-mini:hover{transform:scale(1.1)}
 .pomo-panel{background:var(--bg2);border:1px solid var(--border);border-radius:20px;padding:20px;width:280px;box-shadow:0 12px 40px rgba(0,0,0,.3)}
@@ -641,13 +656,16 @@ function SearchFilter({language,search,onSearch,filter,onFilter,tagFilter,onTagF
 }
 
 // ========== BACKUP REMINDER ==========
-function BackupBar({language,onExport}){
+function BackupBar({language,onExport,onVault,dataCount}){
   const lastExport=localStorage.getItem('gt-last-export');
   const daysSince=lastExport?Math.floor((Date.now()-new Date(lastExport).getTime())/(86400000)):999;
   if(daysSince<7)return null;
   return(<div className="backup-bar">
     <span>⚠️</span><span style={{flex:1}}>{daysSince>=999?T('لم تأخذ نسخة احتياطية بعد!','No backup yet!',language):T(`آخر نسخة من ${daysSince} يوم`,`Last backup ${daysSince} days ago`,language)}</span>
-    <button className="btn btn-gold btn-xs" onClick={onExport}>💾 {T('نسخ الآن','Backup now',language)}</button>
+    <div style={{display:'flex',gap:6}}>
+      <button className="btn btn-gold btn-xs" onClick={onExport}>💾 {T('نسخ الآن','Backup now',language)}</button>
+      {onVault&&<button className="btn btn-ghost btn-xs" style={{fontSize:11}} onClick={onVault}>🛡️ {T('الخزينة','Vault',language)}</button>}
+    </div>
   </div>);
 }
 // ========== CALENDAR EXPORT (.ics) ==========
@@ -1751,34 +1769,38 @@ function generateBudgetPDF(b, bExps, cats, language){
   const getCat=id=>cats.find(c=>c.id===id)||{icon:'❓',color:'#888',name:id,nameEn:id};
   const fmtN=n=>Math.round(n).toLocaleString(isAr?'ar-SA':'en-US');
 
-  // Compute stats
+  // Compute stats — separate income from expenses
   const rates=getStoredRates().rates;
   const expToBud=(e)=>{
     if(e.currency===b.currency)return e.amount;
     if(e.savedRates&&e.savedRates[b.currency])return e.amount*e.savedRates[b.currency];
     return convertAmount(e.amount,e.currency,b.currency,rates);
   };
-  const total=bExps.reduce((s,e)=>s+expToBud(e),0);
-  const pct=b.totalAmount?Math.round(total/b.totalAmount*100):0;
-  const remaining=b.totalAmount-total;
+  const bExpOnly=bExps.filter(e=>e.txType!=='income');
+  const bIncOnly=bExps.filter(e=>e.txType==='income');
+  const total=bExpOnly.reduce((s,e)=>s+expToBud(e),0);       // expenses only
+  const totalInc=bIncOnly.reduce((s,e)=>s+expToBud(e),0);    // income only
+  const effectiveBudgetAmt=b.totalAmount+totalInc;
+  const pct=effectiveBudgetAmt?Math.round(total/effectiveBudgetAmt*100):0;
+  const remaining=effectiveBudgetAmt-total;
 
-  // By category
+  // By category (expenses only)
   const byCat={};
-  bExps.forEach(e=>{const c=e.category;if(!byCat[c])byCat[c]={amount:0,count:0};byCat[c].amount+=expToBud(e);byCat[c].count++;});
+  bExpOnly.forEach(e=>{const c=e.category;if(!byCat[c])byCat[c]={amount:0,count:0};byCat[c].amount+=expToBud(e);byCat[c].count++;});
   const catEntries=Object.entries(byCat).sort((a,z)=>z[1].amount-a[1].amount);
 
-  // By payment
+  // By payment (expenses only)
   const byPay={cash:0,card:0,transfer:0};
-  bExps.forEach(e=>{const a=expToBud(e);if(e.paymentMethod==='card')byPay.card+=a;else if(e.paymentMethod==='transfer')byPay.transfer+=a;else byPay.cash+=a;});
+  bExpOnly.forEach(e=>{const a=expToBud(e);if(e.paymentMethod==='card')byPay.card+=a;else if(e.paymentMethod==='transfer')byPay.transfer+=a;else byPay.cash+=a;});
 
-  // By day (for timeline)
+  // By day — expenses negative, income positive (for timeline bars)
   const byDay={};
-  bExps.forEach(e=>{byDay[e.date]=(byDay[e.date]||0)+expToBud(e);});
+  bExpOnly.forEach(e=>{byDay[e.date]=(byDay[e.date]||0)+expToBud(e);});
   const dayEntries=Object.entries(byDay).sort((a,z)=>a[0].localeCompare(z[0]));
 
-  // By priority
+  // By priority (expenses only)
   const byPri={essential:0,comfort:0,luxury:0,unset:0};
-  bExps.forEach(e=>{const p=e.priority||'unset';byPri[p]=(byPri[p]||0)+expToBud(e);});
+  bExpOnly.forEach(e=>{const p=e.priority||'unset';byPri[p]=(byPri[p]||0)+expToBud(e);});
 
   // Cat colors for charts
   const catColors=catEntries.map(([id])=>{const c=getCat(id);return c.color||'#888';});
@@ -1788,18 +1810,20 @@ function generateBudgetPDF(b, bExps, cats, language){
   const ringOffset=376-(376*(Math.min(pct,100)/100));
   const reportDate=new Date().toLocaleDateString(isAr?'ar-SA':'en-US',{year:'numeric',month:'long',day:'numeric'});
 
-  const txRows=bExps.sort((a,z)=>new Date(a.date)-new Date(z.date)).map(e=>{
+  const txRows=bExps.slice().sort((a,z)=>new Date(a.date)-new Date(z.date)).map(e=>{
     const cat=getCat(e.category);
     const amt=expToBud(e);
+    const isInc=e.txType==='income';
     const payLabel=e.paymentMethod==='card'?T2('بطاقة','Card'):e.paymentMethod==='transfer'?T2('تحويل','Transfer'):T2('نقد','Cash');
     const payClass=e.paymentMethod==='card'?'payment-card':e.paymentMethod==='transfer'?'payment-transfer':'payment-cash';
     const dateStr=new Date(e.date+'T12:00').toLocaleDateString(isAr?'ar-SA':'en-US',{day:'numeric',month:'short'});
+    const typeBadge=isInc?`<span style="background:#22c55e22;color:#22c55e;font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700">${T2('📥 إيراد','📥 Income')}</span>`:`<span style="background:#ff4d6d22;color:#ff4d6d;font-size:10px;padding:2px 7px;border-radius:6px;font-weight:700">${T2('📤 مصروف','📤 Expense')}</span>`;
     return `<tr>
       <td style="color:#64748b">${dateStr}</td>
-      <td>${e.title}</td>
+      <td>${e.title} ${typeBadge}</td>
       <td><span class="tx-tag" style="background:${cat.color}22;color:${cat.color}">${cat.icon} ${isAr?cat.name:cat.nameEn}</span></td>
       <td><span class="payment-badge ${payClass}">${payLabel}</span></td>
-      <td class="tx-amount">${fmtN(amt)} ${b.currency}</td>
+      <td class="tx-amount" style="color:${isInc?'#22c55e':'#e2e8f0'}">${isInc?'+':''}${fmtN(amt)} ${b.currency}</td>
     </tr>`;
   }).join('');
 
@@ -1914,25 +1938,31 @@ body{font-family:'IBM Plex Sans Arabic',sans-serif;background:var(--bg);color:va
   <div class="kpi-grid">
     <div class="kpi gold">
       <div class="kpi-icon">💰</div>
-      <div class="kpi-val"><span>${b.currency}</span>${fmtN(b.totalAmount)}</div>
-      <div class="kpi-label">${T2('إجمالي الميزانية','Total Budget')}</div>
+      <div class="kpi-val"><span>${b.currency}</span>${fmtN(effectiveBudgetAmt)}</div>
+      <div class="kpi-label">${T2('الميزانية الفعلية','Effective Budget')}</div>
+      ${totalInc>0?`<div class="kpi-sub">${T2('أصلية','Base')}: ${fmtN(b.totalAmount)} + ${T2('إيرادات','Income')}: +${fmtN(totalInc)}</div>`:`<div class="kpi-sub">${T2('ميزانية أصلية','Base budget')}</div>`}
     </div>
     <div class="kpi red">
       <div class="kpi-icon">📤</div>
       <div class="kpi-val"><span>${b.currency}</span>${fmtN(total)}</div>
-      <div class="kpi-label">${T2('إجمالي المصروف','Total Spent')}</div>
-      <div class="kpi-sub ${pct>=100?'bad':''}">${pct}% ${T2('من الميزانية','of budget')}</div>
+      <div class="kpi-label">${T2('إجمالي المصاريف','Total Expenses')}</div>
+      <div class="kpi-sub ${pct>=100?'bad':''}">${pct}% ${T2('من الميزانية الفعلية','of effective budget')}</div>
     </div>
-    <div class="kpi ${remaining>=0?'green':'red'}">
+    ${totalInc>0?`<div class="kpi green">
+      <div class="kpi-icon">📥</div>
+      <div class="kpi-val"><span>${b.currency}</span>${fmtN(totalInc)}</div>
+      <div class="kpi-label">${T2('إجمالي الإيرادات','Total Income')}</div>
+      <div class="kpi-sub">${bIncOnly.length} ${T2('معاملة','transactions')}</div>
+    </div>`:`<div class="kpi ${remaining>=0?'green':'red'}">
       <div class="kpi-icon">${remaining>=0?'✅':'⚠️'}</div>
       <div class="kpi-val"><span>${b.currency}</span>${fmtN(Math.abs(remaining))}</div>
       <div class="kpi-label">${remaining>=0?T2('المتبقي','Remaining'):T2('تجاوز الميزانية','Over Budget')}</div>
-    </div>
-    <div class="kpi blue">
-      <div class="kpi-icon">🧾</div>
-      <div class="kpi-val">${bExps.length}</div>
-      <div class="kpi-label">${T2('عدد العمليات','Transactions')}</div>
-      <div class="kpi-sub">${T2('متوسط','Avg')}: ${fmtN(bExps.length?total/bExps.length:0)} ${b.currency}</div>
+    </div>`}
+    <div class="kpi ${remaining>=0?'blue':'red'}">
+      <div class="kpi-icon">${remaining>=0?'✅':'⚠️'}</div>
+      <div class="kpi-val"><span>${b.currency}</span>${fmtN(Math.abs(remaining))}</div>
+      <div class="kpi-label">${remaining>=0?T2('المتبقي','Remaining'):T2('تجاوز الميزانية','Over Budget')}</div>
+      <div class="kpi-sub">${T2('عدد المصاريف','Expenses')}: ${bExpOnly.length} · ${T2('متوسط','Avg')}: ${fmtN(bExpOnly.length?total/bExpOnly.length:0)} ${b.currency}</div>
     </div>
   </div>
 
@@ -2199,47 +2229,65 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
     const priLabel={essential:T('ضروري','Essential',language),comfort:T('مريحة','Comfort',language),luxury:T('رفاهية','Luxury',language)};
     const typeLabel={fixed:T('ثابت','Fixed',language),variable:T('متغير','Variable',language)};
     const payLabel={cash:T('نقد','Cash',language),card:T('بطاقة','Card',language),transfer:T('تحويل','Transfer',language)};
+    const txLabel={income:T('📥 إيراد','📥 Income',language),expense:T('📤 مصروف','📤 Expense',language)};
     const wsData=[[
       T('التاريخ','Date',language),
+      T('نوع المعاملة','Tx Type',language),
       T('التصنيف','Category',language),
       T('الوصف','Description',language),
       T('المبلغ','Amount',language),
       T('العملة','Currency',language),
       T('المبلغ بـ ','Amount in ',language)+baseCur,
-      T('النوع','Type',language),
+      T('نوع المصروف','Exp Type',language),
       T('الأولوية','Priority',language),
       T('طريقة الدفع','Payment',language),
-      T('تاريخ الدفعة القادمة','Next Payment Date',language),
+      T('تاريخ الدفعة القادمة','Next Payment',language),
       T('الميزانية','Budget',language),
       T('ملاحظات','Notes',language)
     ]];
     filtered.forEach(e=>{
       const cat=getCat(e.category);
       const bud=budgets.find(b=>b.id===e.budgetId);
+      const isInc=e.txType==='income';
       wsData.push([
         e.date,
+        txLabel[e.txType||'expense'],
         language==='ar'?cat.name:cat.nameEn,
         e.title,
-        e.amount,
+        isInc?e.amount:-e.amount,   // income positive, expense negative for clarity
         e.currency,
-        Math.round(toBase(e.amount,e.currency)*100)/100,
-        typeLabel[e.expType]||e.expType||'',
-        priLabel[e.priority]||e.priority||'',
+        isInc?Math.round(toBase(e.amount,e.currency)*100)/100:-Math.round(toBase(e.amount,e.currency)*100)/100,
+        isInc?'':typeLabel[e.expType]||e.expType||'',
+        isInc?'':priLabel[e.priority]||e.priority||'',
         payLabel[e.paymentMethod]||e.paymentMethod||'',
-        e.nextPaymentDate||'',
+        isInc?'':e.nextPaymentDate||'',
         bud?`${bud.icon} ${bud.title}`:'',
         e.notes||''
       ]);
     });
-    wsData.push([]);wsData.push(['','',T('الإجمالي','Total',language),'','',Math.round(totalFiltered),'','','','','','']);
-    const sumData=[[T('التصنيف','Category',language),T('المبلغ بـ ','Amount in ',language)+baseCur,T('النسبة','%',language)]];
-    const byC={};filtered.forEach(e=>{byC[e.category]=(byC[e.category]||0)+toBase(e.amount,e.currency);});
-    Object.entries(byC).sort((a,b)=>b[1]-a[1]).forEach(([cid,amt])=>{const cat=getCat(cid);sumData.push([language==='ar'?cat.name:cat.nameEn,Math.round(amt),totalFiltered?Math.round(amt/totalFiltered*100)+'%':'0%']);});
+    // Totals rows
+    const totalExpenses=filtered.filter(e=>e.txType!=='income').reduce((s,e)=>s+toBase(e.amount,e.currency),0);
+    const totalIncome=filtered.filter(e=>e.txType==='income').reduce((s,e)=>s+toBase(e.amount,e.currency),0);
+    wsData.push([]);
+    wsData.push(['','',T('إجمالي المصاريف','Total Expenses',language),'','','',-Math.round(totalExpenses),'','','','','','']);
+    wsData.push(['','',T('إجمالي الإيرادات','Total Income',language),'','','',Math.round(totalIncome),'','','','','','']);
+    wsData.push(['','',T('الصافي','Net',language),'','','',Math.round(totalIncome-totalExpenses),'','','','','','']);
+    // Summary sheet — expenses only by category
+    const sumData=[
+      [T('ملخص المصاريف حسب التصنيف','Expense Summary by Category',language)],[],
+      [T('التصنيف','Category',language),T('المبلغ بـ ','Amount in ',language)+baseCur,T('النسبة','%',language)]
+    ];
+    const byC={};filtered.filter(e=>e.txType!=='income').forEach(e=>{byC[e.category]=(byC[e.category]||0)+toBase(e.amount,e.currency);});
+    Object.entries(byC).sort((a,b)=>b[1]-a[1]).forEach(([cid,amt])=>{const cat=getCat(cid);sumData.push([language==='ar'?cat.name:cat.nameEn,Math.round(amt),totalExpenses?Math.round(amt/totalExpenses*100)+'%':'0%']);});
+    sumData.push([]);
+    sumData.push([T('ملخص الإيرادات حسب التصنيف','Income Summary by Category',language)],[]);
+    sumData.push([T('التصنيف','Category',language),T('المبلغ بـ ','Amount in ',language)+baseCur,T('النسبة','%',language)]);
+    const byCI={};filtered.filter(e=>e.txType==='income').forEach(e=>{byCI[e.category]=(byCI[e.category]||0)+toBase(e.amount,e.currency);});
+    Object.entries(byCI).sort((a,b)=>b[1]-a[1]).forEach(([cid,amt])=>{const cat=getCat(cid);sumData.push([language==='ar'?cat.name:cat.nameEn,Math.round(amt),totalIncome?Math.round(amt/totalIncome*100)+'%':'0%']);});
     const wb=XLSX.utils.book_new();const ws1=XLSX.utils.aoa_to_sheet(wsData);const ws2=XLSX.utils.aoa_to_sheet(sumData);
-    // Column widths
-    ws1['!cols']=[{wch:12},{wch:16},{wch:28},{wch:10},{wch:8},{wch:14},{wch:10},{wch:10},{wch:10},{wch:18},{wch:18},{wch:24}];
-    XLSX.utils.book_append_sheet(wb,ws1,T('المصاريف','Expenses',language));XLSX.utils.book_append_sheet(wb,ws2,T('الملخص','Summary',language));
-    XLSX.writeFile(wb,`expenses-${localDS()}.xlsx`);
+    ws1['!cols']=[{wch:12},{wch:14},{wch:16},{wch:28},{wch:10},{wch:8},{wch:14},{wch:10},{wch:10},{wch:10},{wch:16},{wch:18},{wch:24}];
+    XLSX.utils.book_append_sheet(wb,ws1,T('المعاملات','Transactions',language));XLSX.utils.book_append_sheet(wb,ws2,T('الملخص','Summary',language));
+    XLSX.writeFile(wb,`mutqin-transactions-${localDS()}.xlsx`);
     toast(T('تم التصدير 📤','Exported 📤',language));
   };
 
@@ -2260,14 +2308,43 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
     toast(imported>0?T(`تم استيراد ${imported} مصروف ثابت 📌`,`Imported ${imported} recurring expenses 📌`,language):T('لا جديد — كل القوالب مضافة لهذا الشهر','Nothing new — all templates already added this month',language));
   },[allExpRaw,onSaveExpense,language,toast]);
 
+  const[fabOpen,setFabOpen]=useState(false);
+  const[menuOpen,setMenuOpen]=useState(false);
+  const[expandedExp,setExpandedExp]=useState(null);
+
   return(<div style={{display:'flex',flexDirection:'column',gap:16}}>
-    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2 style={{fontSize:22,fontWeight:900}}>💰 {T('المعاملات','Transactions',language)}</h2><div style={{display:'flex',gap:6}}>
-      <button className="btn btn-coral btn-sm" onClick={()=>setExpModal({_isNew:true,txType:'expense'})}>📤 {T('مصروف','Expense',language)}</button>
-      <button className="btn btn-lime btn-sm" onClick={()=>setExpModal({_isNew:true,txType:'income'})}>📥 {T('إيراد','Income',language)}</button>
-      <button className="btn btn-gold btn-sm" title={T('قوالب المصاريف الثابتة','Recurring Templates',language)} onClick={()=>setRecurModal(true)}>📌</button>
-      <button className="btn btn-ghost btn-sm" onClick={()=>setMgtMode(!mgtMode)}>{mgtMode?'✕':'⚙️'}</button>
-      <button className="btn btn-ghost btn-sm" onClick={handleExportXlsx}>📤 Excel</button>
-    </div></div>
+    {/* Clean header: title + 2 buttons only */}
+    <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+      <h2 style={{fontSize:22,fontWeight:900}}>💰 {T('المعاملات','Transactions',language)}</h2>
+      <div style={{display:'flex',gap:6,alignItems:'center'}}>
+        {mgtMode&&<button className="btn btn-coral btn-icon-sm" style={{borderRadius:10}} onClick={()=>setMgtMode(false)}>✕</button>}
+        {!mgtMode&&<button className="btn btn-ghost btn-icon-sm" style={{borderRadius:10,fontSize:16}} onClick={()=>setMgtMode(true)}>⚙️</button>}
+        {/* ⋯ menu */}
+        <div style={{position:'relative'}}>
+          <button className="btn btn-ghost btn-icon-sm" style={{borderRadius:10,fontSize:18,letterSpacing:-1}} onClick={()=>setMenuOpen(p=>!p)}>···</button>
+          {menuOpen&&<>
+            <div style={{position:'fixed',inset:0,zIndex:48}} onClick={()=>setMenuOpen(false)}/>
+            <div style={{position:'absolute',top:'calc(100% + 6px)',right:0,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:14,padding:8,zIndex:49,minWidth:160,boxShadow:'0 8px 32px rgba(0,0,0,.3)',display:'flex',flexDirection:'column',gap:4}}>
+              <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:10,fontSize:13,padding:'10px 14px'}} onClick={()=>{handleExportXlsx();setMenuOpen(false);}}>📤 {T('تصدير Excel','Export Excel',language)}</button>
+              <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:10,fontSize:13,padding:'10px 14px'}} onClick={()=>{setRecurModal(true);setMenuOpen(false);}}>📌 {T('قوالب ثابتة','Recurring',language)}</button>
+            </div>
+          </>}
+        </div>
+      </div>
+    </div>
+    {/* FAB — floating add button */}
+    <div className="exp-fab">
+      <div className={`exp-fab-option ${fabOpen?'visible':''}`} style={{transitionDelay:fabOpen?'.05s':'0s'}}>
+        <span className="exp-fab-label">📥 {T('إيراد','Income',language)}</span>
+        <button style={{background:'linear-gradient(135deg,#55E6C1,#00B894)',color:'white'}} onClick={()=>{setFabOpen(false);setExpModal({_isNew:true,txType:'income'});}}>📥</button>
+      </div>
+      <div className={`exp-fab-option ${fabOpen?'visible':''}`} style={{transitionDelay:'0s'}}>
+        <span className="exp-fab-label">📤 {T('مصروف','Expense',language)}</span>
+        <button style={{background:'linear-gradient(135deg,#FF6B6B,#EE5A24)',color:'white'}} onClick={()=>{setFabOpen(false);setExpModal({_isNew:true,txType:'expense'});}}>📤</button>
+      </div>
+      <button className={`exp-fab-main ${fabOpen?'open':''}`} onClick={()=>setFabOpen(p=>!p)}>+</button>
+    </div>
+    {fabOpen&&<div style={{position:'fixed',inset:0,zIndex:45}} onClick={()=>setFabOpen(false)}/>}
     {(()=>{
       const now=new Date();
       const upcomingToday=allExp.filter(e=>e.nextPaymentDate&&new Date(e.nextPaymentDate+'T12:00').toDateString()===now.toDateString());
@@ -2377,30 +2454,55 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
             <div style={{marginBottom:10,display:'flex',gap:8}}>
               <button className="btn btn-gold btn-sm" style={{flex:1,fontSize:12}} onClick={()=>{
                   const bExps2=allExpRaw.filter(e=>e.budgetId===b.id).sort((a,c)=>new Date(a.date)-new Date(c.date));
-                  const hdr=[[T('تقرير ميزانية','Budget Report',language)+': '+b.title],[T('إجمالي الميزانية','Total Budget',language)+': '+b.totalAmount+' '+b.currency],[T('تاريخ التقرير','Report Date',language)+': '+new Date().toLocaleDateString(language==='ar'?'ar-SA':'en-US')],[]];
-                  const cols=[T('التاريخ','Date',language),T('التصنيف','Category',language),T('الوصف','Description',language),T('المبلغ الأصلي','Original Amount',language),T('العملة','Currency',language),T('سعر التحويل','Exchange Rate',language),T('مصدر السعر','Rate Source',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('طريقة الدفع','Payment',language),T('ملاحظات','Notes',language)];
+                  const bExpOnly2=bExps2.filter(e=>e.txType!=='income');
+                  const bIncOnly2=bExps2.filter(e=>e.txType==='income');
+                  const totalSpent2=bExpOnly2.reduce((s,e)=>s+expToBudget(e,b.currency),0);
+                  const totalIncome2=bIncOnly2.reduce((s,e)=>s+expToBudget(e,b.currency),0);
+                  const effectiveBudget2=b.totalAmount+totalIncome2;
+                  const remaining2=effectiveBudget2-totalSpent2;
+                  const hdr=[
+                    [T('تقرير ميزانية','Budget Report',language)+': '+b.title],
+                    [T('الميزانية الأصلية','Base Budget',language)+': '+b.totalAmount+' '+b.currency],
+                    ...(totalIncome2>0?[[T('إيرادات مرتبطة','Linked Income',language)+': +'+Math.round(totalIncome2)+' '+b.currency],[T('الميزانية الفعلية','Effective Budget',language)+': '+Math.round(effectiveBudget2)+' '+b.currency]]:[]),
+                    [T('تاريخ التقرير','Report Date',language)+': '+new Date().toLocaleDateString(language==='ar'?'ar-SA':'en-US')],
+                    []
+                  ];
+                  const cols=[T('التاريخ','Date',language),T('النوع','Type',language),T('التصنيف','Category',language),T('الوصف','Description',language),T('المبلغ الأصلي','Orig. Amount',language),T('العملة','Currency',language),T('سعر التحويل','Rate',language),T('مصدر السعر','Rate Source',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('طريقة الدفع','Payment',language),T('ملاحظات','Notes',language)];
                   const rows=[cols];
-                  let totalConverted=0;
-                  bExps2.forEach(e=>{const cat=getCat(e.category);
+                  bExps2.forEach(e=>{
+                    const cat=getCat(e.category);
+                    const isInc2=e.txType==='income';
                     const rate=expRate(e,b.currency);
-                    const converted=e.amount*rate;totalConverted+=converted;
+                    const converted=Math.round(e.amount*rate*100)/100;
                     const rateSource=e.savedRates&&e.savedRates[b.currency]?T('محفوظ ✅','Saved ✅',language):T('حالي ⚠️','Current ⚠️',language);
-                    rows.push([e.date,language==='ar'?cat.name:cat.nameEn,e.title,e.amount,e.currency,e.currency!==b.currency?Math.round(rate*10000)/10000:'—',e.currency!==b.currency?rateSource:'—',Math.round(converted*100)/100,e.paymentMethod||'',e.notes||'']);
+                    const txLbl=isInc2?T('📥 إيراد','📥 Income',language):T('📤 مصروف','📤 Expense',language);
+                    rows.push([e.date,txLbl,language==='ar'?cat.name:cat.nameEn,e.title,isInc2?e.amount:-e.amount,e.currency,e.currency!==b.currency?Math.round(rate*10000)/10000:'—',e.currency!==b.currency?rateSource:'—',isInc2?converted:-converted,e.paymentMethod||'',e.notes||'']);
                   });
                   rows.push([]);
-                  rows.push(['','',T('الإجمالي المصروف','Total Spent',language),'','','','',Math.round(totalConverted*100)/100,'','']);
-                  rows.push(['','',T('المتبقي','Remaining',language),'','','','',Math.round((b.totalAmount-totalConverted)*100)/100,'','']);
-                  rows.push(['','',T('النسبة المصروفة','% Spent',language),'','','','',b.totalAmount?Math.round(totalConverted/b.totalAmount*10000)/100+'%':'0%','','']);
+                  rows.push(['','','',T('إجمالي المصاريف','Total Expenses',language),'','','','',-Math.round(totalSpent2),'','']);
+                  if(totalIncome2>0){
+                    rows.push(['','','',T('إجمالي الإيرادات','Total Income',language),'','','','',Math.round(totalIncome2),'','']);
+                    rows.push(['','','',T('الميزانية الفعلية','Effective Budget',language),'','','','',Math.round(effectiveBudget2),'','']);
+                  }
+                  rows.push(['','','',T('المتبقي','Remaining',language),'','','','',Math.round(remaining2),'','']);
+                  rows.push(['','','',T('النسبة المصروفة','% Spent',language),'','','','',effectiveBudget2?Math.round(totalSpent2/effectiveBudget2*10000)/100+'%':'0%','','']);
                   rows.push([]);
-                  rows.push([T('📌 محفوظ = سعر الصرف وقت تسجيل المصروف (دقيق) | ⚠️ حالي = سعر اليوم (مصاريف قديمة قبل التحديث)','📌 Saved = rate at expense entry time (accurate) | ⚠️ Current = today\'s rate (old expenses before update)',language)]);
+                  rows.push([T('📌 محفوظ = سعر الصرف وقت تسجيل المصروف (دقيق) | ⚠️ حالي = سعر اليوم','📌 Saved = exchange rate at entry time (accurate) | ⚠️ Current = today\'s rate',language)]);
                   const wb2=XLSX.utils.book_new();const ws=XLSX.utils.aoa_to_sheet([...hdr,...rows]);
-                  ws['!cols']=[{wch:12},{wch:16},{wch:25},{wch:14},{wch:8},{wch:14},{wch:14},{wch:16},{wch:12},{wch:20}];
+                  ws['!cols']=[{wch:12},{wch:14},{wch:16},{wch:25},{wch:13},{wch:8},{wch:10},{wch:14},{wch:16},{wch:12},{wch:20}];
                   XLSX.utils.book_append_sheet(wb2,ws,b.title.slice(0,31));
-                  const catSm=[[T('تقرير حسب التصنيف','Category Summary',language)],[]];
-                  catSm.push([T('التصنيف','Category',language),T('عدد العمليات','Transactions',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('النسبة','%',language)]);
-                  const byCat2={};bExps2.forEach(e=>{const cid=e.category;if(!byCat2[cid])byCat2[cid]={amt:0,cnt:0};byCat2[cid].amt+=expToBudget(e,b.currency);byCat2[cid].cnt++;});
-                  Object.entries(byCat2).sort((a,c)=>c[1].amt-a[1].amt).forEach(([cid,info])=>{const cat=getCat(cid);catSm.push([language==='ar'?cat.name:cat.nameEn,info.cnt,Math.round(info.amt*100)/100,totalConverted?Math.round(info.amt/totalConverted*100)+'%':'0%']);});
-                  const ws2=XLSX.utils.aoa_to_sheet(catSm);ws2['!cols']=[{wch:20},{wch:14},{wch:18},{wch:10}];
+                  // Summary sheet: expenses by category
+                  const catSm=[[T('ملخص المصاريف حسب التصنيف','Expense Summary by Category',language)],[]];
+                  catSm.push([T('التصنيف','Category',language),T('عدد','Count',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('النسبة','%',language)]);
+                  const byCat2E={};bExpOnly2.forEach(e=>{const cid=e.category;if(!byCat2E[cid])byCat2E[cid]={amt:0,cnt:0};byCat2E[cid].amt+=expToBudget(e,b.currency);byCat2E[cid].cnt++;});
+                  Object.entries(byCat2E).sort((a,c)=>c[1].amt-a[1].amt).forEach(([cid,info])=>{const cat=getCat(cid);catSm.push([language==='ar'?cat.name:cat.nameEn,info.cnt,Math.round(info.amt*100)/100,totalSpent2?Math.round(info.amt/totalSpent2*100)+'%':'0%']);});
+                  if(bIncOnly2.length>0){
+                    catSm.push([],[T('ملخص الإيرادات حسب التصنيف','Income Summary by Category',language)],[]);
+                    catSm.push([T('التصنيف','Category',language),T('عدد','Count',language),T('المبلغ بـ ','Amount in ',language)+b.currency,T('النسبة','%',language)]);
+                    const byCat2I={};bIncOnly2.forEach(e=>{const cid=e.category;if(!byCat2I[cid])byCat2I[cid]={amt:0,cnt:0};byCat2I[cid].amt+=expToBudget(e,b.currency);byCat2I[cid].cnt++;});
+                    Object.entries(byCat2I).sort((a,c)=>c[1].amt-a[1].amt).forEach(([cid,info])=>{const cat=getCat(cid);catSm.push([language==='ar'?cat.name:cat.nameEn,info.cnt,Math.round(info.amt*100)/100,totalIncome2?Math.round(info.amt/totalIncome2*100)+'%':'0%']);});
+                  }
+                  const ws2=XLSX.utils.aoa_to_sheet(catSm);ws2['!cols']=[{wch:22},{wch:8},{wch:18},{wch:10}];
                   XLSX.utils.book_append_sheet(wb2,ws2,T('ملخص','Summary',language));
                   XLSX.writeFile(wb2,`budget-${b.title}-${localDS()}.xlsx`);
                   toast(T('تم تصدير الميزانية 📤','Budget exported 📤',language));
@@ -2461,17 +2563,40 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
       </div>
     </div>
 
-    <div className="card" style={{padding:14}}>
+    <div className="card" style={{padding:14,marginBottom:80}}>
       <div className="search-wrap" style={{marginBottom:10}}><span className="search-icon">🔍</span><input className="field" value={expSearch} onChange={e=>setExpSearch(e.target.value)} placeholder={T('ابحث في المصاريف...','Search expenses...',language)} style={{paddingRight:language==='ar'?36:12,paddingLeft:language!=='ar'?36:12}}/>{expSearch&&<span className="search-clear" onClick={()=>setExpSearch('')}>✕</span>}</div>
       {!grouped.length?<p style={{textAlign:'center',color:'var(--text2)',padding:20}}>🫥 {T('لا معاملات','No transactions',language)}</p>:grouped.map(([date,exps])=>(<div key={date}>
         <div className="exp-date-group">{new Date(date+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'long',day:'numeric',month:'short'})}
           {(()=>{const dayInc=exps.filter(e=>e.txType==='income').reduce((s,e)=>s+toBase(e.amount,e.currency),0);const dayExp=exps.filter(e=>e.txType!=='income').reduce((s,e)=>s+toBase(e.amount,e.currency),0);if(dayInc>0&&dayExp>0)return <span> — <span style={{color:'var(--lime)'}}>+{fmtMoney(dayInc)}</span> / <span style={{color:'var(--coral)'}}>-{fmtMoney(dayExp)}</span> {baseCur}</span>;if(dayInc>0)return <span> — <span style={{color:'var(--lime)'}}>+{fmtMoney(dayInc)}</span> {baseCur}</span>;return <span> — {fmtMoney(dayExp)} {baseCur}</span>;})()}
         </div>
-        {exps.map(e=>{const cat=getCat(e.category);const isInc=e.txType==='income';return(<div key={e.id} className="exp-item" style={{borderRight:isInc?'3px solid var(--lime)':'3px solid transparent',paddingRight:isInc?8:0}}>
-          <div className="exp-cat-dot" style={{background:`${cat.color}22`}}>{cat.icon}</div>
-          <div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14,display:'flex',alignItems:'center',gap:5}}>{e.title}{isInc&&<span style={{fontSize:9,padding:'1px 6px',borderRadius:5,background:'var(--lime-g)',color:'var(--lime)',fontWeight:700}}>📥 {T('إيراد','Income',language)}</span>}</div><div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:6,flexWrap:'wrap'}}><span>{language==='ar'?cat.name:cat.nameEn}</span>{e.paymentMethod&&<span>· {e.paymentMethod==='cash'?'💵':e.paymentMethod==='card'?'💳':'🏦'}</span>}{!isInc&&e.expType&&<span style={{padding:'1px 6px',borderRadius:5,fontWeight:700,background:e.expType==='fixed'?'var(--gold-g)':'var(--electric-g)',color:e.expType==='fixed'?'var(--gold)':'var(--electric)'}}>{e.expType==='fixed'?'🔒':'🔀'}{T(e.expType==='fixed'?' ثابت':' متغير',e.expType==='fixed'?' Fixed':' Var',language)}</span>}{!isInc&&e.priority&&<span style={{padding:'1px 6px',borderRadius:5,fontWeight:700,background:e.priority==='essential'?'var(--coral-g)':e.priority==='comfort'?'var(--gold-g)':'var(--lime-g)',color:e.priority==='essential'?'var(--coral)':e.priority==='comfort'?'var(--gold)':'var(--lime)'}}>{e.priority==='essential'?'🔴':e.priority==='comfort'?'🟡':'🟢'}</span>}{!isInc&&e.nextPaymentDate&&<span style={{color:'var(--teal)'}}>📅 {new Date(e.nextPaymentDate+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'short',day:'numeric'})}</span>}{e.notes&&<span>· 📝</span>}</div></div>
-          <div style={{textAlign:'end'}}><div className="exp-amount" style={{color:isInc?'var(--lime)':cat.color}}>{isInc?'+':''}{e.amount.toFixed(e.amount%1?2:0)}</div><div style={{fontSize:10,color:'var(--text2)'}}>{CURRENCIES.find(c=>c.code===e.currency)?.icon} {e.currency}{e.currency!==baseCur&&<span style={{opacity:.6}}> ≈ {fmtMoney(toBase(e.amount,e.currency))} {baseCur}</span>}</div></div>
-          <div style={{display:'flex',flexDirection:'column',gap:2}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>setExpModal({...e,txType:e.txType||'expense'})}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDeleteExpense(e)}>🗑️</button></div>
+        {exps.map(e=>{const cat=getCat(e.category);const isInc=e.txType==='income';const isExp2=expandedExp===e.id;return(<div key={e.id} className="exp-item" style={{borderRight:isInc?'3px solid var(--lime)':'3px solid transparent'}} onClick={()=>setExpandedExp(isExp2?null:e.id)}>
+          <div className="exp-item-row">
+            <div className="exp-cat-dot" style={{background:`${cat.color}22`}}>{cat.icon}</div>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:700,fontSize:14,display:'flex',alignItems:'center',gap:5}}>
+                {e.title}
+                {isInc&&<span style={{fontSize:9,padding:'1px 6px',borderRadius:5,background:'var(--lime-g)',color:'var(--lime)',fontWeight:700}}>📥</span>}
+              </div>
+              <div style={{fontSize:11,color:'var(--text2)',display:'flex',gap:5,flexWrap:'wrap',marginTop:2}}>
+                <span style={{display:'flex',alignItems:'center',gap:3}}><span style={{width:6,height:6,borderRadius:'50%',background:cat.color,display:'inline-block'}}></span>{language==='ar'?cat.name:cat.nameEn}</span>
+                {e.paymentMethod&&<span>{e.paymentMethod==='cash'?'💵':e.paymentMethod==='card'?'💳':'🏦'}</span>}
+                {!isInc&&e.expType==='fixed'&&<span style={{fontSize:10,fontWeight:700,color:'var(--gold)'}}>🔒</span>}
+                {!isInc&&e.priority==='essential'&&<span style={{fontSize:10}}>🔴</span>}
+                {!isInc&&e.nextPaymentDate&&<span style={{color:'var(--teal)',fontSize:10}}>📅{new Date(e.nextPaymentDate+'T12:00').toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'numeric',day:'numeric'})}</span>}
+                {e.notes&&<span style={{fontSize:10}}>📝</span>}
+              </div>
+            </div>
+            <div style={{textAlign:'end',flexShrink:0}}>
+              <div className="exp-amount" style={{color:isInc?'var(--lime)':cat.color}}>{isInc?'+':''}{e.amount.toFixed(e.amount%1?2:0)}</div>
+              <div style={{fontSize:10,color:'var(--text2)'}}>{CURRENCIES.find(c=>c.code===e.currency)?.icon} {e.currency}</div>
+              {e.currency!==baseCur&&<div style={{fontSize:9,color:'var(--text2)',opacity:.6}}>≈{fmtMoney(toBase(e.amount,e.currency))}</div>}
+            </div>
+            <span style={{fontSize:10,color:'var(--text2)',opacity:.4,marginRight:2,transition:'transform .2s',transform:isExp2?'rotate(180deg)':'none',flexShrink:0}}>▼</span>
+          </div>
+          {isExp2&&<div className="exp-item-actions">
+            <button className="btn btn-ghost btn-sm" style={{gap:6,fontSize:12}} onClick={ev=>{ev.stopPropagation();setExpModal({...e,txType:e.txType||'expense'});}}>✏️ {T('تعديل','Edit',language)}</button>
+            <button className="btn btn-ghost btn-sm" style={{gap:6,fontSize:12,color:'var(--coral)'}} onClick={ev=>{ev.stopPropagation();onDeleteExpense(e);setExpandedExp(null);}}>🗑️ {T('حذف','Delete',language)}</button>
+          </div>}
         </div>);})}
       </div>))}
     </div>
@@ -3332,14 +3457,28 @@ function App(){
 
   const load=useCallback(async()=>{
     const d={};for(const s of ST)d[s]=await dAll(s);setData(d);
-    // Auto-backup: save snapshot to localStorage after every load
+    // Auto-backup: rolling 7-day daily snapshots
     try{
       const total=Object.values(d).reduce((s,a)=>s+a.length,0);
       if(total>0){
         const backup=JSON.stringify(d);
+        const today=new Date().toISOString().slice(0,10);
+        // Always keep 1 latest + 1 per day for last 7 days
         localStorage.setItem('gt-auto-backup',backup);
         localStorage.setItem('gt-auto-backup-date',new Date().toISOString());
         localStorage.setItem('gt-auto-backup-count',String(total));
+        // Daily snapshot key
+        const dayKey=`gt-snap-${today}`;
+        localStorage.setItem(dayKey,backup);
+        localStorage.setItem(dayKey+'-count',String(total));
+        // Prune snapshots older than 7 days
+        const cutoff=new Date();cutoff.setDate(cutoff.getDate()-7);
+        Object.keys(localStorage).filter(k=>k.startsWith('gt-snap-')).forEach(k=>{
+          const dateStr=k.replace('gt-snap-','').replace('-count','');
+          if(dateStr.match(/^\d{4}-\d{2}-\d{2}$/)&&new Date(dateStr)<cutoff){
+            try{localStorage.removeItem(k);}catch(e){}
+          }
+        });
       }
     }catch(e){/* localStorage full — ignore */}
   },[]);
@@ -3461,6 +3600,7 @@ function App(){
       healthProfile:localStorage.getItem('gt-health-profile')||null,
       recurringTemplates:localStorage.getItem('mutqin-recurring')||null,
       notifSettings:localStorage.getItem('gt-notif')||null,
+      lastExport:new Date().toISOString(),
     };
     const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
     const a=document.createElement('a');a.href=URL.createObjectURL(b);
@@ -3468,6 +3608,40 @@ function App(){
     localStorage.setItem('gt-last-export',new Date().toISOString());
     toast(T('تم تصدير كل البيانات 📤','All data exported 📤',lang));
   },[lang,toast]);
+  // Get all available local snapshots for Vault view
+  const getLocalSnapshots=useCallback(()=>{
+    const snaps=[];
+    Object.keys(localStorage).filter(k=>k.startsWith('gt-snap-')&&!k.endsWith('-count')).forEach(k=>{
+      const dateStr=k.replace('gt-snap-','');
+      const count=localStorage.getItem(k+'-count')||'?';
+      try{const d=JSON.parse(localStorage.getItem(k)||'{}');const total=Object.values(d).reduce((s,a)=>s+(Array.isArray(a)?a.length:0),0);snaps.push({key:k,date:dateStr,count:total||count});}
+      catch(e){snaps.push({key:k,date:dateStr,count:count});}
+    });
+    return snaps.sort((a,b)=>b.date.localeCompare(a.date));
+  },[]);
+
+  const handleRestoreSnapshot=useCallback(async(key)=>{
+    try{
+      const backup=JSON.parse(localStorage.getItem(key));
+      if(!backup)return;
+      for(const s of ST){await dClr(s);if(backup[s])for(const it of backup[s])await dPut(s,it);}
+      await initCats();await load();
+      toast(T('🎉 تم استعادة النسخة بنجاح!','🎉 Snapshot restored!',lang),'success');
+    }catch(e){toast(T('خطأ في الاستعادة','Restore error',lang),'error');}
+  },[load,toast,lang]);
+
+  const handleDownloadSnapshot=useCallback((key,date)=>{
+    try{
+      const data=localStorage.getItem(key);
+      if(!data)return;
+      const b=new Blob([data],{type:'application/json'});
+      const a=document.createElement('a');a.href=URL.createObjectURL(b);
+      a.download=`mutqin-snap-${date}.json`;a.click();
+    }catch(e){}
+  },[]);
+
+  const[vaultOpen,setVaultOpen]=useState(false);
+
   const handleCalExport=useCallback(()=>{const{content,count}=generateICS(data,lang);if(!count){toast(T('لا توجد مهام بتاريخ للتصدير','No dated tasks to export',lang),'warning');return;}const b=new Blob([content],{type:'text/calendar;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`goal-tracker-${localDS()}.ics`;a.click();toast(T(`تم تصدير ${count} حدث للتقويم 📅`,`Exported ${count} events to calendar 📅`,lang));},[data,lang,toast]);
   const handleImport=useCallback(()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=async e=>{try{const txt=await e.target.files[0].text(),imp=JSON.parse(txt);const doIt=async()=>{
     for(const s of ST){await dClr(s);if(imp[s])for(const it of imp[s])await dPut(s,it);}
@@ -3480,6 +3654,7 @@ function App(){
       if(s.notifSettings)localStorage.setItem('gt-notif',s.notifSettings);
       if(s.theme)localStorage.setItem('gt-theme',s.theme);
       if(s.language){localStorage.setItem('gt-lang',s.language);setLangState(s.language);}
+      if(s.lastExport)localStorage.setItem('gt-last-export',s.lastExport);
     }
     await initCats();await load();
     toast(T('تم استيراد كل البيانات ✅','All data imported ✅',lang));
@@ -3531,6 +3706,7 @@ function App(){
             <div onClick={()=>{setLang(lang==='ar'?'en':'ar');setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>🌐</span>{lang==='ar'?'English':'عربي'}</div>
             <div style={{height:1,background:'var(--border)',margin:'4px 0'}}/>
             <div onClick={()=>{handleExport();setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>📤</span>{T('تصدير JSON','Export JSON',lang)}</div>
+            <div onClick={()=>{setVaultOpen(true);setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--teal)'}}><span style={{fontSize:18}}>🛡️</span>{T('خزينة النسخ','Backup Vault',lang)}</div>
             <div onClick={()=>{handleImport();setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>📥</span>{T('استيراد JSON','Import JSON',lang)}</div>
             <div onClick={()=>{setUploadModal(true);setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>📂</span>{T('استيراد Excel','Import Excel',lang)}</div>
             <div onClick={()=>{handleCalExport();setMoreMenu(false);}} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 14px',borderRadius:10,cursor:'pointer',fontSize:13,fontWeight:600,color:'var(--text)'}}><span style={{fontSize:18}}>📅</span>{T('تصدير للتقويم','Export to Calendar',lang)}</div>
@@ -3543,7 +3719,7 @@ function App(){
           <div className="mobile-preview">
             <div style={{flex:1,overflowY:'auto',overflowX:'hidden',background:'var(--bg)'}}>
               <div style={{padding:'36px 10px 90px',maxWidth:'100%'}}>
-                <BackupBar language={lang} onExport={handleExport}/>
+                <BackupBar language={lang} onExport={handleExport} onVault={()=>setVaultOpen(true)}/>
                 {view!=='timeline'&&view!=='expenses'&&view!=='notes'&&view!=='meetings'&&<div style={{marginBottom:16}}><Cal language={lang} data={data} onDayClick={handleDayClick}/></div>}
                 {view==='dashboard'&&<><AnalyticsDashboard data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter} tagFilter={tagFilter} onTagFilter={setTagFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter} tagFilter={tagFilter}/></>}
                 {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList}/>}
@@ -3560,7 +3736,7 @@ function App(){
       ):(
         <>
           <main className="desktop-layout" style={{flex:1,maxWidth:860,margin:'0 auto',width:'100%',padding:'16px 12px 100px'}}>
-            <BackupBar language={lang} onExport={handleExport}/>
+            <BackupBar language={lang} onExport={handleExport} onVault={()=>setVaultOpen(true)}/>
             {view==='dashboard'||view==='today'?(
               <div className="desk-split">
                 <div className="cal-col">
@@ -3597,6 +3773,58 @@ function App(){
       {expFromCal&&<ExpenseModal expense={{_isNew:true,date:expFromCal}} categories={data.categories||[]} budgets={data.budgets||[]} language={lang} onSave={async e=>{await handleSaveExpense(e);setExpFromCal(null);}} onClose={()=>setExpFromCal(null)}/>}
       {uploadModal&&<UploadModal language={lang} onImport={handleXlsxImport} onClose={()=>setUploadModal(false)}/>}
       {notifModal&&<NotifSettingsModal language={lang} toast={toast} onClose={()=>setNotifModal(false)}/>}
+      {vaultOpen&&(()=>{const snaps=getLocalSnapshots();const lastExp=localStorage.getItem('gt-last-export');const autoDate=localStorage.getItem('gt-auto-backup-date');const autoCount=localStorage.getItem('gt-auto-backup-count');return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:440,maxHeight:'90dvh',overflow:'auto'}}>
+        <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
+          <h3 style={{fontSize:16,fontWeight:800}}>🛡️ {T('خزينة النسخ الاحتياطية','Backup Vault',lang)}</h3>
+          <button className="btn btn-ghost btn-icon-xs" onClick={()=>setVaultOpen(false)}>✕</button>
+        </div>
+        <div style={{padding:20,display:'flex',flexDirection:'column',gap:14}}>
+          {/* Status summary */}
+          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+            <div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+              <div style={{fontSize:10,color:'var(--text2)',fontWeight:700,marginBottom:4}}>💾 {T('آخر تصدير يدوي','Last Manual Export',lang)}</div>
+              <div style={{fontSize:13,fontWeight:800,color:lastExp?'var(--lime)':'var(--coral)'}}>{lastExp?new Date(lastExp).toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short'}):T('لم يتم بعد','Never',lang)}</div>
+            </div>
+            <div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+              <div style={{fontSize:10,color:'var(--text2)',fontWeight:700,marginBottom:4}}>🔄 {T('آخر نسخة تلقائية','Last Auto Snapshot',lang)}</div>
+              <div style={{fontSize:13,fontWeight:800,color:'var(--teal)'}}>{autoDate?new Date(autoDate).toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'-'}</div>
+              {autoCount&&<div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>{autoCount} {T('عنصر','items',lang)}</div>}
+            </div>
+          </div>
+          {/* Quick actions */}
+          <div style={{display:'flex',gap:8}}>
+            <button className="btn btn-teal btn-sm" style={{flex:1}} onClick={()=>{handleExport();}}><span>📤</span> {T('تصدير الآن','Export Now',lang)}</button>
+            <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>{
+              // Download the latest auto-backup directly
+              const d=localStorage.getItem('gt-auto-backup');
+              if(!d){toast(T('لا توجد نسخة تلقائية','No auto-backup found',lang),'warning');return;}
+              const b=new Blob([d],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='mutqin-auto-backup.json';a.click();
+            }}>💾 {T('تحميل التلقائية','Download Auto',lang)}</button>
+          </div>
+          {/* Rolling snapshots */}
+          <div>
+            <div style={{fontSize:12,fontWeight:800,color:'var(--text2)',marginBottom:8}}>📅 {T('نقاط استعادة الـ 7 أيام','7-Day Recovery Points',lang)}</div>
+            {!snaps.length?<div style={{textAlign:'center',padding:20,color:'var(--text2)',fontSize:13}}>
+              <div style={{fontSize:32,marginBottom:8}}>🌱</div>
+              {T('ستُبنى النقاط تلقائياً عند فتح التطبيق يومياً','Recovery points build automatically as you use the app daily',lang)}
+            </div>:snaps.map(s=>(
+              <div key={s.key} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',marginBottom:6}}>
+                <div style={{fontSize:20}}>📦</div>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:700,fontSize:13}}>{new Date(s.date+'T12:00').toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{weekday:'short',day:'numeric',month:'short'})}</div>
+                  <div style={{fontSize:11,color:'var(--text2)'}}>{s.count} {T('عنصر','items',lang)}</div>
+                </div>
+                <button className="btn btn-ghost btn-xs" title={T('تحميل','Download',lang)} onClick={()=>handleDownloadSnapshot(s.key,s.date)}>💾</button>
+                <button className="btn btn-ghost btn-xs" title={T('استعادة','Restore',lang)} style={{color:'var(--teal)'}} onClick={()=>{if(window.confirm(T(`استعادة نسخة ${s.date}؟ سيتم استبدال البيانات الحالية.`,`Restore snapshot ${s.date}? Current data will be replaced.`,lang))){handleRestoreSnapshot(s.key).then(()=>setVaultOpen(false));}}}>🔄</button>
+              </div>
+            ))}
+          </div>
+          {/* Advice */}
+          <div style={{padding:12,borderRadius:10,background:'var(--gold-g)',border:'1px solid var(--gold)',fontSize:12,color:'var(--gold)',fontWeight:600,lineHeight:1.7}}>
+            💡 {T('النصيحة: صدّر ملف JSON يدوياً مرة أسبوعياً واحفظه في Google Drive أو iCloud — هذه هي الحماية الأقوى.','Tip: Export a JSON file manually once a week and save it to Google Drive or iCloud — this is your strongest protection.',lang)}
+          </div>
+        </div>
+      </div></div>)})()}
       {restorePrompt&&<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400,textAlign:'center',padding:30}}>
         <div style={{fontSize:48,marginBottom:16}}>💾</div>
         <h3 style={{fontSize:18,fontWeight:800,marginBottom:10,color:'var(--gold)'}}>{T('تم العثور على نسخة احتياطية!','Backup Found!',lang)}</h3>
