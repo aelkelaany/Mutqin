@@ -268,15 +268,16 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 [dir="ltr"] .pomo-float{right:16px}
 @media(min-width:768px){.pomo-float{bottom:20px}}
 /* FAB */
-.exp-fab{position:fixed;bottom:90px;z-index:46;display:flex;flex-direction:column;align-items:flex-end;gap:10px}
-[dir="rtl"] .exp-fab{right:16px}
-[dir="ltr"] .exp-fab{left:16px}
-.exp-fab-main{width:52px;height:52px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:22px;box-shadow:0 4px 20px rgba(0,0,0,.35);transition:all .25s cubic-bezier(.4,0,.2,1);background:linear-gradient(135deg,#FF6B6B,#EE5A24);color:white}
-.exp-fab-main.open{transform:rotate(45deg);background:linear-gradient(135deg,#555,#333)}
-.exp-fab-option{display:flex;align-items:center;gap:10px;opacity:0;transform:translateY(14px) scale(.9);transition:all .2s cubic-bezier(.4,0,.2,1);pointer-events:none}
+.exp-fab{position:fixed;bottom:96px;z-index:46;display:flex;flex-direction:column;align-items:flex-end;gap:8px}
+[dir="rtl"] .exp-fab{left:16px}
+[dir="ltr"] .exp-fab{right:16px}
+.exp-fab-main{width:48px;height:48px;border-radius:50%;border:none;cursor:pointer;display:flex;align-items:center;justify-content:center;font-size:20px;box-shadow:0 4px 16px rgba(0,0,0,.4);transition:all .25s cubic-bezier(.4,0,.2,1);background:linear-gradient(135deg,#FF6B6B,#EE5A24);color:white}
+.exp-fab-main.open{transform:rotate(45deg);background:linear-gradient(135deg,#444,#222)}
+.exp-fab-option{display:flex;align-items:center;gap:8px;opacity:0;transform:translateY(10px) scale(.92);transition:all .18s cubic-bezier(.4,0,.2,1);pointer-events:none}
+[dir="rtl"] .exp-fab-option{flex-direction:row-reverse}
 .exp-fab-option.visible{opacity:1;transform:translateY(0) scale(1);pointer-events:auto}
-.exp-fab-option button{height:42px;padding:0 16px;border-radius:50px;border:none;cursor:pointer;font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px;box-shadow:0 4px 14px rgba(0,0,0,.25);font-family:inherit;white-space:nowrap}
-.exp-fab-label{font-size:11px;font-weight:700;padding:4px 10px;border-radius:20px;background:var(--bg2);border:1px solid var(--border);color:var(--text);white-space:nowrap;box-shadow:0 2px 8px rgba(0,0,0,.2)}
+.exp-fab-option button{height:38px;padding:0 14px;border-radius:50px;border:none;cursor:pointer;font-size:13px;font-weight:800;display:flex;align-items:center;gap:6px;box-shadow:0 3px 12px rgba(0,0,0,.3);font-family:inherit;white-space:nowrap}
+.exp-fab-label{font-size:11px;font-weight:700;padding:3px 10px;border-radius:20px;background:rgba(0,0,0,.7);border:1px solid rgba(255,255,255,.15);color:#fff;white-space:nowrap}
 /* Expense item tap-to-expand (styles in main CSS block) */
 .pomo-mini{width:56px;height:56px;border-radius:50%;background:linear-gradient(135deg,var(--coral),#EE5A24);color:white;display:flex;align-items:center;justify-content:center;cursor:pointer;box-shadow:0 6px 24px var(--coral-g);font-size:22px;border:none;transition:all .2s}
 .pomo-mini:hover{transform:scale(1.1)}
@@ -309,8 +310,9 @@ const cheer=(lang)=>CHEERS[lang][Math.floor(Math.random()*CHEERS[lang].length)];
 
 const HM={ar:['محرم','صفر','ربيع الأول','ربيع الثاني','جمادى الأولى','جمادى الآخرة','رجب','شعبان','رمضان','شوال','ذو القعدة','ذو الحجة'],en:['Muharram','Safar','Rabi I','Rabi II','Jumada I','Jumada II','Rajab','Sha\'ban','Ramadan','Shawwal','Dhul Qi\'dah','Dhul Hijjah']};
 // Umm al-Qura calendar via Intl API
-const _hFmt={day:new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{day:'numeric'}),month:new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{month:'numeric'}),year:new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{year:'numeric'}),monthName_ar:new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{month:'long'}),monthName_en:new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{month:'long'})};
-function toH(y,m,d){try{const dt=new Date(y,m-1,d);return{day:parseInt(_hFmt.day.format(dt)),month:parseInt(_hFmt.month.format(dt)),year:parseInt(_hFmt.year.format(dt).replace(/\D/g,'')),monthName_ar:_hFmt.monthName_ar.format(dt),monthName_en:_hFmt.monthName_en.format(dt)};}catch(e){return{day:d,month:m,year:y,monthName_ar:'',monthName_en:''};}}
+const _hFmt={day:new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn',{day:'numeric'}),month:new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn',{month:'numeric'}),year:new Intl.DateTimeFormat('en-u-ca-islamic-umalqura-nu-latn',{year:'numeric'}),monthName_ar:new Intl.DateTimeFormat('ar-SA-u-ca-islamic-umalqura',{month:'long'}),monthName_en:new Intl.DateTimeFormat('en-u-ca-islamic-umalqura',{month:'long'})};
+function _toW(s){return String(s).replace(/[٠-٩]/g,c=>c.charCodeAt(0)-0x0660).replace(/[۰-۹]/g,c=>c.charCodeAt(0)-0x06F0);}  // Arabic/Persian digits → Western
+function toH(y,m,d){try{const dt=new Date(y,m-1,d);return{day:parseInt(_toW(_hFmt.day.format(dt))),month:parseInt(_toW(_hFmt.month.format(dt))),year:parseInt(_toW(_hFmt.year.format(dt)).replace(/\D/g,'')),monthName_ar:_hFmt.monthName_ar.format(dt),monthName_en:_hFmt.monthName_en.format(dt)};}catch(e){return{day:d,month:m,year:y,monthName_ar:'',monthName_en:''};}}
 function hijriHeader(y,m,lang){const dt=new Date(y,m,15);const h=toH(y,m+1,15);const mName=lang==='ar'?h.monthName_ar:h.monthName_en;return`${mName} ${h.year}`;}
 
 // DB
@@ -1027,7 +1029,7 @@ function ItemModal({type,editItem,goalId,milestoneId,language,onSave,onClose,all
 function ListModal({editList,language,onSave,onClose}){const isE=editList&&editList.id;const[f,setF]=useState({name:'',icon:'🛒',color:'#FF6B6B',items:[],...(isE?editList:{})});const save=()=>{if(!f.name.trim())return;const now=new Date().toISOString();onSave(isE?{...f,updatedAt:now}:{...f,id:uid(),createdAt:now,items:[]});};return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:420,padding:28,borderRadius:24}}><h3 style={{fontSize:18,fontWeight:800,marginBottom:20}}>{isE?'✏️':'📋'} {isE?T('تعديل','Edit',language):T('قائمة جديدة','New List',language)}</h3><div style={{display:'flex',flexDirection:'column',gap:16}}><div><span className="label">{T('الأيقونة','Icon',language)}</span><IconPick icons={ICONS.lists} sel={f.icon} onSel={v=>setF({...f,icon:v})}/></div><div><span className="label">{T('الاسم','Name',language)} *</span><input className="field" value={f.name} onChange={e=>setF({...f,name:e.target.value})} autoFocus/></div><div><span className="label">{T('اللون','Color',language)}</span><ColPick sel={f.color} onSel={v=>setF({...f,color:v})}/></div></div><div style={{display:'flex',gap:10,justifyContent:'flex-end',marginTop:24}}><button className="btn btn-ghost" onClick={onClose}>{T('إلغاء','Cancel',language)}</button><button className="btn btn-teal" onClick={save}>{isE?T('💾 حفظ','💾 Save',language):T('✨ إضافة','✨ Add',language)}</button></div></div></div>);}
 
 // ========== CALENDAR ==========
-function Cal({language,data,onDayClick}){const[cur,setCur]=useState(new Date());const y=cur.getFullYear(),m=cur.getMonth();const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate();const today=new Date(),tStr=localDS(today);const hdr=useMemo(()=>hijriHeader(y,m,language),[y,m,language]);const mN=cur.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'long',year:'numeric'});const iFor=useCallback(ds=>{const r=[];(data.tasks||[]).forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))r.push({...x,_type:'task'});});(data.quickTasks||[]).forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))r.push({...x,_type:'quickTask'});});(data.meetings||[]).forEach(x=>{if(x.meetingDate&&x.meetingDate.startsWith(ds))r.push({...x,_type:'meeting'});});return r;},[data]);const dn=language==='ar'?['أحد','إثن','ثلا','أرب','خمي','جمع','سبت']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];const cells=[];for(let i=0;i<first;i++)cells.push(null);for(let d=1;d<=days;d++)cells.push(d);return(<div className="card" style={{padding:'16px 12px'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,padding:'0 4px'}}><button className="btn btn-ghost btn-icon-sm" onClick={()=>setCur(new Date(y,m-1,1))} style={{fontSize:16}}>{language==='ar'?'▶':'◀'}</button><div style={{textAlign:'center'}}><div style={{fontSize:16,fontWeight:800,color:'var(--coral)'}}>📅 {mN}</div><div style={{fontSize:12,color:'var(--gold)',fontWeight:600}}>🌙 {hdr}</div></div><button className="btn btn-ghost btn-icon-sm" onClick={()=>setCur(new Date(y,m+1,1))} style={{fontSize:16}}>{language==='ar'?'◀':'▶'}</button></div><div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>{dn.map((d,i)=>(<div key={i} style={{textAlign:'center',fontSize:11,fontWeight:700,color:'var(--text2)',padding:'4px 0'}}>{d}</div>))}{cells.map((day,i)=>{if(!day)return<div key={'e'+i}/>;const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;const isT=ds===tStr,items=iFor(ds),has=items.length>0;const h=toH(y,m+1,day);return(<div key={day} className="cal-cell" onClick={()=>onDayClick(ds,items)} style={{background:isT?'linear-gradient(135deg,var(--coral),#EE5A24)':has?'var(--bg3)':'transparent',boxShadow:isT?'0 4px 15px var(--coral-g)':'none'}}><span style={{fontSize:14,fontWeight:isT?800:500,color:isT?'white':'var(--text)'}}>{day}</span><span className="hidden md:block" style={{fontSize:9,color:isT?'rgba(255,255,255,.7)':'var(--text2)',fontWeight:600}}>{h.day}</span>{has&&!isT&&<div className="glow-dot" style={{background:'var(--teal)',boxShadow:'0 0 6px var(--teal-g)'}}/>}{has&&isT&&<div style={{width:6,height:6,borderRadius:'50%',background:'white'}}/>}</div>);})}</div></div>);}
+function Cal({language,data,onDayClick}){const[cur,setCur]=useState(new Date());const y=cur.getFullYear(),m=cur.getMonth();const first=new Date(y,m,1).getDay(),days=new Date(y,m+1,0).getDate();const today=new Date(),tStr=localDS(today);const hdr=useMemo(()=>hijriHeader(y,m,language),[y,m,language]);const mN=cur.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'long',year:'numeric'});const iFor=useCallback(ds=>{const r=[];(data.tasks||[]).forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))r.push({...x,_type:'task'});});(data.quickTasks||[]).forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))r.push({...x,_type:'quickTask'});});(data.meetings||[]).forEach(x=>{if(x.meetingDate&&x.meetingDate.startsWith(ds))r.push({...x,_type:'meeting'});});return r;},[data]);const dn=language==='ar'?['أحد','إثن','ثلا','أرب','خمي','جمع','سبت']:['Sun','Mon','Tue','Wed','Thu','Fri','Sat'];const cells=[];for(let i=0;i<first;i++)cells.push(null);for(let d=1;d<=days;d++)cells.push(d);return(<div className="card" style={{padding:'16px 12px'}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14,padding:'0 4px'}}><button className="btn btn-ghost btn-icon-sm" onClick={()=>setCur(new Date(y,m-1,1))} style={{fontSize:16}}>{language==='ar'?'▶':'◀'}</button><div style={{textAlign:'center'}}><div style={{fontSize:16,fontWeight:800,color:'var(--coral)'}}>📅 {mN}</div><div style={{fontSize:12,color:'var(--gold)',fontWeight:600}}>🌙 {hdr}</div></div><button className="btn btn-ghost btn-icon-sm" onClick={()=>setCur(new Date(y,m+1,1))} style={{fontSize:16}}>{language==='ar'?'◀':'▶'}</button></div><div style={{display:'grid',gridTemplateColumns:'repeat(7,1fr)',gap:3}}>{dn.map((d,i)=>(<div key={i} style={{textAlign:'center',fontSize:11,fontWeight:700,color:'var(--text2)',padding:'4px 0'}}>{d}</div>))}{cells.map((day,i)=>{if(!day)return<div key={'e'+i}/>;const ds=`${y}-${String(m+1).padStart(2,'0')}-${String(day).padStart(2,'0')}`;const isT=ds===tStr,items=iFor(ds),has=items.length>0;const h=toH(y,m+1,day);return(<div key={day} className="cal-cell" onClick={()=>onDayClick(ds,items)} style={{background:isT?'linear-gradient(135deg,var(--coral),#EE5A24)':has?'var(--bg3)':'transparent',boxShadow:isT?'0 4px 15px var(--coral-g)':'none'}}><span style={{fontSize:14,fontWeight:isT?800:500,color:isT?'white':'var(--text)'}}>{day}</span><span style={{fontSize:9,color:isT?'rgba(255,255,255,.7)':'var(--text2)',fontWeight:600,lineHeight:1}}>{h.day}</span>{has&&!isT&&<div className="glow-dot" style={{background:'var(--teal)',boxShadow:'0 0 6px var(--teal-g)'}}/>}{has&&isT&&<div style={{width:6,height:6,borderRadius:'50%',background:'white'}}/>}</div>);})}</div></div>);}
 
 function DayMod({dateStr,items,language,onClose,onAddTask,onAddMeeting,onAddExpense,onStatus,onReorder}){const d=new Date(dateStr+'T00:00:00');const fmt=d.toLocaleDateString(language==='ar'?'ar-SA':'en-US',{weekday:'long',year:'numeric',month:'long',day:'numeric'});const h=toH(d.getFullYear(),d.getMonth()+1,d.getDate());const hName=language==='ar'?h.monthName_ar:h.monthName_en;
 const[daySort,setDaySort]=useState('none');
@@ -1113,19 +1115,19 @@ function relativeTime(dateStr, language){
   const calDays = Math.round((dtMidnight - todayMidnight) / 86400000);
 
   if(diffMs > 0){
-    if(absM < 1)  return isAr ? 'الآن' : 'Now';
-    if(absM < 60) return isAr ? `بعد ${absM} دقيقة` : `in ${absM}m`;
-    if(absH < 24) return isAr ? `بعد ${absH} ساعة` : `in ${absH}h`;
+    if(absM < 1)   return isAr ? 'الآن' : 'Now';
+    if(absM < 60)  return isAr ? `بعد ${absM} دقيقة` : `in ${absM}m`;
+    if(calDays === 0) return isAr ? `بعد ${absH} ساعة` : `in ${absH}h`;  // same calendar day
     if(calDays === 1) return isAr ? 'غداً' : 'Tomorrow';
-    if(calDays < 7) return isAr ? `بعد ${calDays} أيام` : `in ${calDays} days`;
+    if(calDays < 7)  return isAr ? `بعد ${calDays} أيام` : `in ${calDays} days`;
     return isAr ? `بعد ${Math.round(calDays/7)} أسابيع` : `in ${Math.round(calDays/7)}w`;
   } else {
-    if(absM < 1)  return isAr ? 'الآن' : 'Now';
-    if(absM < 60) return isAr ? `منذ ${absM} دقيقة` : `${absM}m ago`;
-    if(absH < 24) return isAr ? `منذ ${absH} ساعة` : `${absH}h ago`;
+    if(absM < 1)   return isAr ? 'الآن' : 'Now';
+    if(absM < 60)  return isAr ? `منذ ${absM} دقيقة` : `${absM}m ago`;
+    if(calDays === 0)  return isAr ? `منذ ${absH} ساعة` : `${absH}h ago`;  // same calendar day
     if(calDays === -1) return isAr ? 'أمس' : 'Yesterday';
     const absCal = Math.abs(calDays);
-    if(absCal < 7) return isAr ? `منذ ${absCal} أيام` : `${absCal}d ago`;
+    if(absCal < 7)  return isAr ? `منذ ${absCal} أيام` : `${absCal}d ago`;
     if(absCal < 30) return isAr ? `منذ ${Math.round(absCal/7)} أسابيع` : `${Math.round(absCal/7)}w ago`;
     return isAr ? `منذ ${Math.round(absCal/30)} أشهر` : `${Math.round(absCal/30)}mo ago`;
   }
@@ -2324,7 +2326,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
           <button className="btn btn-ghost btn-icon-sm" style={{borderRadius:10,fontSize:18,letterSpacing:-1}} onClick={()=>setMenuOpen(p=>!p)}>···</button>
           {menuOpen&&<>
             <div style={{position:'fixed',inset:0,zIndex:48}} onClick={()=>setMenuOpen(false)}/>
-            <div style={{position:'absolute',top:'calc(100% + 6px)',right:0,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:14,padding:8,zIndex:49,minWidth:160,boxShadow:'0 8px 32px rgba(0,0,0,.3)',display:'flex',flexDirection:'column',gap:4}}>
+            <div style={{position:'fixed',top:60,[language==='ar'?'left':'right']:12,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:14,padding:8,zIndex:200,minWidth:170,boxShadow:'0 8px 32px rgba(0,0,0,.5)',display:'flex',flexDirection:'column',gap:4}}>
               <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:10,fontSize:13,padding:'10px 14px'}} onClick={()=>{handleExportXlsx();setMenuOpen(false);}}>📤 {T('تصدير Excel','Export Excel',language)}</button>
               <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:10,fontSize:13,padding:'10px 14px'}} onClick={()=>{setRecurModal(true);setMenuOpen(false);}}>📌 {T('قوالب ثابتة','Recurring',language)}</button>
             </div>
@@ -2444,11 +2446,18 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
               <button className="btn btn-ghost btn-sm" onClick={()=>setSelBudget(null)}>←</button>
               <span style={{fontSize:24}}>{b.icon}</span>
               <div style={{flex:1}}><div style={{fontWeight:800,fontSize:16,display:'flex',alignItems:'center',gap:6}}>{b.title}{b.closed&&<span style={{fontSize:10,padding:'2px 8px',borderRadius:6,background:'var(--coral-g)',color:'var(--coral)',fontWeight:700}}>🔒 {T('مغلقة','Closed',language)}</span>}</div><div style={{fontSize:11,color:'var(--text2)'}}>{b.startDate&&`${b.startDate} → ${b.endDate||'∞'}`}</div></div>
-              <div style={{display:'flex',gap:4,flexWrap:'wrap'}}>
-                <button className="btn btn-ghost btn-xs" onClick={()=>setBudModal(b)}>✏️</button>
-                <button className="btn btn-ghost btn-xs" style={{color:'var(--coral)'}} onClick={()=>{onDeleteBudget(b);setSelBudget(null);}}>🗑️</button>
-                {!b.closed&&<><button className="btn btn-coral btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency,txType:'expense'})}>📤 {T('مصروف','Expense',language)}</button>
-                <button className="btn btn-lime btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency,txType:'income'})}>📥 {T('إيراد','Income',language)}</button></>}
+              <div style={{display:'flex',gap:6,alignItems:'center'}}>
+                {!b.closed&&<><button className="btn btn-coral btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency,txType:'expense'})}>📤 {T('مصروف','Exp',language)}</button>
+                <button className="btn btn-lime btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency,txType:'income'})}>📥 {T('إيراد','Inc',language)}</button></>}
+                {/* Budget ⋯ mini menu */}
+                {(()=>{const[bm,setBm]=useState(false);return(<div style={{position:'relative'}}>
+                  <button className="btn btn-ghost btn-icon-xs" style={{fontSize:16,letterSpacing:-1}} onClick={()=>setBm(p=>!p)}>···</button>
+                  {bm&&<><div style={{position:'fixed',inset:0,zIndex:58}} onClick={()=>setBm(false)}/>
+                  <div style={{position:'fixed',top:'auto',right:'auto',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:12,padding:6,zIndex:59,minWidth:140,boxShadow:'0 8px 32px rgba(0,0,0,.5)',display:'flex',flexDirection:'column',gap:3}}>
+                    <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:8,fontSize:13,padding:'8px 12px'}} onClick={()=>{setBudModal(b);setBm(false);}}>✏️ {T('تعديل','Edit',language)}</button>
+                    <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:8,fontSize:13,padding:'8px 12px',color:'var(--coral)'}} onClick={()=>{onDeleteBudget(b);setSelBudget(null);setBm(false);}}>🗑️ {T('حذف','Delete',language)}</button>
+                  </div></>}
+                </div>);})()}
               </div>
             </div>
             <div style={{marginBottom:10,display:'flex',gap:8}}>
@@ -3765,7 +3774,7 @@ function App(){
       )}
       <Toasts toasts={toasts} onDismiss={id=>setToasts(p=>p.filter(t=>t.id!==id))}/>
       <InAppAlerts language={lang}/>
-      <Pomodoro language={lang}/>
+      {view==='today'&&<Pomodoro language={lang}/>}
       {modal&&<ItemModal type={modal.type} editItem={modal.editItem} goalId={modal.goalId} milestoneId={modal.milestoneId} language={lang} onSave={handleSave} onClose={()=>setModal(null)} allTasks={data.tasks||[]}/>}
       {listModal&&<ListModal editList={listModal.id?listModal:null} language={lang} onSave={handleSaveListModal} onClose={()=>setListModal(null)}/>}
       {confirm&&<Confirm message={confirm.message} language={lang} onOk={confirm.onOk} onCancel={()=>setConfirm(null)}/>}
