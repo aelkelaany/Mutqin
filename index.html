@@ -2058,6 +2058,13 @@ new Chart(document.getElementById('timelineChart'),{
 </body></html>`;
 
   const win=window.open('','_blank');
+  if(!win){
+    // Popup blocked — fallback: download as HTML file
+    const blob=new Blob([html],{type:'text/html'});
+    const a=document.createElement('a');a.href=URL.createObjectURL(blob);
+    a.download=`budget-report-${b.title}.html`;a.click();
+    return;
+  }
   win.document.write(html);
   win.document.close();
 }
@@ -2163,6 +2170,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
   const[rateLoading,setRateLoading]=useState(false);
   const[selBudget,setSelBudget]=useState(null);
   const[expandedCats,setExpandedCats]=useState({});
+  const[budMenuOpen,setBudMenuOpen]=useState(false);
 
   const baseCur=rateData.baseCurrency||'SAR';
   const rates=rateData.rates||DEF_RATES;
@@ -2451,14 +2459,14 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
                 {!b.closed&&<><button className="btn btn-coral btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency,txType:'expense'})}>📤 {T('مصروف','Exp',language)}</button>
                 <button className="btn btn-lime btn-xs" onClick={()=>setExpModal({_isNew:true,budgetId:b.id,currency:b.currency,txType:'income'})}>📥 {T('إيراد','Inc',language)}</button></>}
                 {/* Budget ⋯ mini menu */}
-                {(()=>{const[bm,setBm]=useState(false);return(<div style={{position:'relative'}}>
-                  <button className="btn btn-ghost btn-icon-xs" style={{fontSize:16,letterSpacing:-1}} onClick={()=>setBm(p=>!p)}>···</button>
-                  {bm&&<><div style={{position:'fixed',inset:0,zIndex:58}} onClick={()=>setBm(false)}/>
-                  <div style={{position:'fixed',top:'auto',right:'auto',background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:12,padding:6,zIndex:59,minWidth:140,boxShadow:'0 8px 32px rgba(0,0,0,.5)',display:'flex',flexDirection:'column',gap:3}}>
-                    <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:8,fontSize:13,padding:'8px 12px'}} onClick={()=>{setBudModal(b);setBm(false);}}>✏️ {T('تعديل','Edit',language)}</button>
-                    <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:8,fontSize:13,padding:'8px 12px',color:'var(--coral)'}} onClick={()=>{onDeleteBudget(b);setSelBudget(null);setBm(false);}}>🗑️ {T('حذف','Delete',language)}</button>
+                <div style={{position:'relative'}}>
+                  <button className="btn btn-ghost btn-icon-xs" style={{fontSize:16,letterSpacing:-1}} onClick={()=>setBudMenuOpen(p=>!p)}>···</button>
+                  {budMenuOpen&&<><div style={{position:'fixed',inset:0,zIndex:58}} onClick={()=>setBudMenuOpen(false)}/>
+                  <div style={{position:'fixed',top:120,right:16,background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:12,padding:6,zIndex:59,minWidth:140,boxShadow:'0 8px 32px rgba(0,0,0,.5)',display:'flex',flexDirection:'column',gap:3}}>
+                    <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:8,fontSize:13,padding:'8px 12px'}} onClick={()=>{setBudModal(b);setBudMenuOpen(false);}}>✏️ {T('تعديل','Edit',language)}</button>
+                    <button className="btn btn-ghost" style={{justifyContent:'flex-start',gap:8,fontSize:13,padding:'8px 12px',color:'var(--coral)'}} onClick={()=>{onDeleteBudget(b);setSelBudget(null);setBudMenuOpen(false);}}>🗑️ {T('حذف','Delete',language)}</button>
                   </div></>}
-                </div>);})()}
+                </div>
               </div>
             </div>
             <div style={{marginBottom:10,display:'flex',gap:8}}>
@@ -3459,6 +3467,7 @@ function VaultModal({lang,toast,onClose,handleExport,handleImport,getLocalSnapsh
   const[driveFiles,setDriveFiles]=useState([]);
   const[driveLoading,setDriveLoading]=useState(false);
   const[driveUploading,setDriveUploading]=useState(false);
+  const[confirmDrive,setConfirmDrive]=useState(null); // {msg, onOk}
   const snaps=getLocalSnapshots();
   const lastExp=localStorage.getItem('gt-last-export');
   const autoDate=localStorage.getItem('gt-auto-backup-date');
@@ -3490,7 +3499,8 @@ function VaultModal({lang,toast,onClose,handleExport,handleImport,getLocalSnapsh
     if(!dToken){toast(T2('غير متصل','Not connected'),'warning');return;}
     setDriveUploading(true);
     try{
-      const d={};for(const s of ST)d[s]=data[s]||[];
+      // Read fresh from IndexedDB — never use stale React prop
+      const d={};for(const s of ST)d[s]=await dAll(s);
       d._settings={language:lang,theme:localStorage.getItem('gt-theme'),rates:localStorage.getItem('gt-rates'),recurringTemplates:localStorage.getItem('mutqin-recurring'),notifSettings:localStorage.getItem('gt-notif'),lastExport:new Date().toISOString()};
       const json=JSON.stringify(d,null,2);
       const filename=`mutqin-backup-${new Date().toISOString().slice(0,10)}.json`;
@@ -3499,34 +3509,40 @@ function VaultModal({lang,toast,onClose,handleExport,handleImport,getLocalSnapsh
       toast(T2('✅ تم الرفع إلى Google Drive','✅ Uploaded to Google Drive'),'success');
       loadDriveFiles(dToken);
     }catch(e){
-      if(e.message&&e.message.includes('401')){gdClearToken();setDToken(null);toast(T2('انتهت الجلسة، أعد الاتصال','Session expired, reconnect'),'error');}
+      if(e.message&&(e.message.includes('401')||e.message.includes('403'))){gdClearToken();setDToken(null);toast(T2('انتهت الجلسة، أعد الاتصال','Session expired, reconnect'),'error');}
       else toast(T2('فشل الرفع: '+e.message,'Upload failed: '+e.message),'error');
     }finally{setDriveUploading(false);}
   };
 
   const handleRestoreDrive=async(file)=>{
-    if(!window.confirm(T2(`استعادة نسخة ${file.name}؟ سيتم استبدال كل البيانات الحالية.`,`Restore ${file.name}? This will replace ALL current data.`)))return;
-    try{
-      const json=await gdDownloadFile(dToken,file.id);
-      const imp=JSON.parse(json);
-      for(const s of ST){const db=await(async()=>{return new Promise((r,j)=>{const q=indexedDB.open('GoalTrackerDB');q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error);})})();await new Promise((r,j)=>{const tx=db.transaction(s,'readwrite');tx.objectStore(s).clear();tx.oncomplete=r;tx.onerror=j;});if(imp[s])for(const it of imp[s])await new Promise((r,j)=>{const q=indexedDB.open('GoalTrackerDB');q.onsuccess=()=>{const tx=q.result.transaction(s,'readwrite');tx.objectStore(s).put(it);tx.oncomplete=r;};q.onerror=j;});}
-      toast(T2('🎉 تم استعادة البيانات من Drive!','🎉 Data restored from Drive!'),'success');
-      onClose();
-      setTimeout(()=>window.location.reload(),800);
-    }catch(e){toast(T2('فشل الاستعادة','Restore failed'),'error');}
+    setConfirmDrive({msg:T2(`استعادة نسخة ${file.name}؟ سيتم استبدال كل البيانات الحالية.`,`Restore ${file.name}? This will replace ALL current data.`),onOk:async()=>{
+      setConfirmDrive(null);
+      try{
+        const json=await gdDownloadFile(dToken,file.id);
+        const imp=JSON.parse(json);
+        // Use same helpers as local restore — dClr/dPut handle DB version correctly
+        for(const s of ST){await dClr(s);if(imp[s])for(const it of imp[s])await dPut(s,it);}
+        if(imp._settings){const s=imp._settings;if(s.rates)localStorage.setItem('gt-rates',s.rates);if(s.healthProfile)localStorage.setItem('gt-health-profile',s.healthProfile);if(s.recurringTemplates)localStorage.setItem('mutqin-recurring',s.recurringTemplates);if(s.notifSettings)localStorage.setItem('gt-notif',s.notifSettings);if(s.theme)localStorage.setItem('gt-theme',s.theme);if(s.language)localStorage.setItem('gt-lang',s.language);if(s.lastExport)localStorage.setItem('gt-last-export',s.lastExport);}
+        toast(T2('🎉 تم استعادة البيانات من Drive!','🎉 Data restored from Drive!'),'success');
+        onClose();
+        setTimeout(()=>window.location.reload(),800);
+      }catch(e){toast(T2('فشل الاستعادة: '+e.message,'Restore failed: '+e.message),'error');}
+    }});
   };
 
   const handleDeleteDrive=async(file)=>{
-    if(!window.confirm(T2(`حذف ${file.name} من Drive؟`,`Delete ${file.name} from Drive?`)))return;
-    try{await gdDeleteFile(dToken,file.id);toast(T2('تم الحذف','Deleted'));loadDriveFiles(dToken);}
-    catch(e){toast(T2('فشل الحذف','Delete failed'),'error');}
+    setConfirmDrive({msg:T2(`حذف ${file.name} من Drive؟`,`Delete ${file.name} from Drive?`),onOk:async()=>{
+      setConfirmDrive(null);
+      try{await gdDeleteFile(dToken,file.id);toast(T2('تم الحذف','Deleted'));loadDriveFiles(dToken);}
+      catch(e){toast(T2('فشل الحذف','Delete failed'),'error');}
+    }});
   };
 
   useEffect(()=>{if(tab==='drive'&&dToken&&driveFiles.length===0)loadDriveFiles(dToken);},[tab]);
 
   const tabStyle=(id)=>({padding:'8px 16px',borderRadius:10,fontWeight:700,fontSize:13,border:'none',cursor:'pointer',background:tab===id?'var(--teal)':'transparent',color:tab===id?'white':'var(--text2)',transition:'all .15s'});
 
-  return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:460,maxHeight:'92dvh',display:'flex',flexDirection:'column',padding:0,overflow:'hidden'}}>
+  return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:460,maxHeight:'92dvh',display:'flex',flexDirection:'column',padding:0,overflow:'hidden',position:'relative'}}>
     {/* Header */}
     <div style={{padding:'18px 20px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
       <h3 style={{fontSize:16,fontWeight:800}}>🛡️ {T2('خزينة النسخ الاحتياطية','Backup Vault')}</h3>
@@ -3569,7 +3585,7 @@ function VaultModal({lang,toast,onClose,handleExport,handleImport,getLocalSnapsh
             <div style={{fontSize:18}}>📦</div>
             <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>{new Date(s.date+'T12:00').toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{weekday:'short',day:'numeric',month:'short'})}</div><div style={{fontSize:11,color:'var(--text2)'}}>{s.count} {T2('عنصر','items')}</div></div>
             <button className="btn btn-ghost btn-xs" onClick={()=>handleDownloadSnapshot(s.key,s.date)}>💾</button>
-            <button className="btn btn-ghost btn-xs" style={{color:'var(--teal)'}} onClick={()=>{if(window.confirm(T2(`استعادة ${s.date}؟`,`Restore ${s.date}?`)))handleRestoreSnapshot(s.key).then(onClose);}}>🔄</button>
+            <button className="btn btn-ghost btn-xs" style={{color:'var(--teal)'}} onClick={()=>setConfirmDrive({msg:T2(`استعادة نسخة ${s.date}؟ سيتم استبدال كل البيانات.`,`Restore snapshot ${s.date}? All current data will be replaced.`),onOk:()=>{setConfirmDrive(null);handleRestoreSnapshot(s.key).then(onClose);}})}>🔄</button>
           </div>))}
         </div>
       </>}
@@ -3647,6 +3663,17 @@ function VaultModal({lang,toast,onClose,handleExport,handleImport,getLocalSnapsh
         </div>)}
       </>}
     </div>
+    {/* Custom confirm dialog — no window.confirm() */}
+    {confirmDrive&&<div style={{position:'absolute',inset:0,background:'rgba(0,0,0,.7)',display:'flex',alignItems:'center',justifyContent:'center',borderRadius:'inherit',zIndex:10}}>
+      <div style={{background:'var(--bg2)',border:'1px solid var(--border)',borderRadius:16,padding:24,maxWidth:300,width:'90%',textAlign:'center'}}>
+        <div style={{fontSize:32,marginBottom:12}}>⚠️</div>
+        <p style={{fontSize:13,color:'var(--text)',marginBottom:20,lineHeight:1.6}}>{confirmDrive.msg}</p>
+        <div style={{display:'flex',gap:10,justifyContent:'center'}}>
+          <button className="btn btn-ghost btn-sm" onClick={()=>setConfirmDrive(null)}>{T2('إلغاء','Cancel')}</button>
+          <button className="btn btn-coral btn-sm" onClick={confirmDrive.onOk}>{T2('تأكيد','Confirm')}</button>
+        </div>
+      </div>
+    </div>}
   </div></div>);
 }
 
