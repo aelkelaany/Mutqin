@@ -16,6 +16,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.9/babel.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
 <link href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css" rel="stylesheet">
 <link href="https://fonts.googleapis.com/css2?family=Tajawal:wght@300;400;500;700;800;900&family=Poppins:wght@300;400;500;600;700;800;900&display=swap" rel="stylesheet">
 <script>
@@ -3444,6 +3445,301 @@ function useNotifications(data,lang){
   },[data,lang]);
 }
 
+
+
+// ============================================================
+// VAULT MODAL COMPONENT (with Google Drive)
+// ============================================================
+function VaultModal({lang,toast,onClose,handleExport,handleImport,getLocalSnapshots,handleDownloadSnapshot,handleRestoreSnapshot,data,ST}){
+  const T2=(a,e)=>lang==='ar'?a:e;
+  const[tab,setTab]=useState('local');           // 'local' | 'drive'
+  const[clientId,setClientId]=useState(()=>gdGetClientId());
+  const[editingId,setEditingId]=useState(false);
+  const[dToken,setDToken]=useState(()=>gdGetToken());
+  const[driveFiles,setDriveFiles]=useState([]);
+  const[driveLoading,setDriveLoading]=useState(false);
+  const[driveUploading,setDriveUploading]=useState(false);
+  const snaps=getLocalSnapshots();
+  const lastExp=localStorage.getItem('gt-last-export');
+  const autoDate=localStorage.getItem('gt-auto-backup-date');
+  const autoCount=localStorage.getItem('gt-auto-backup-count');
+  const lastUpload=gdGetLastUpload();
+
+  const loadDriveFiles=async(token)=>{
+    setDriveLoading(true);
+    try{const files=await gdListBackups(token);setDriveFiles(files);}
+    catch(e){toast(T2('خطأ في تحميل ملفات Drive','Failed to load Drive files'),'error');gdClearToken();setDToken(null);}
+    finally{setDriveLoading(false);}
+  };
+
+  const handleConnect=async()=>{
+    const id=clientId.trim();
+    if(!id){toast(T2('أدخل Client ID أولاً','Enter your Client ID first'),'warning');return;}
+    try{
+      gdSaveClientId(id);
+      const token=await gdAuth(id);
+      setDToken(token);
+      toast(T2('✅ تم الاتصال بـ Google Drive','✅ Connected to Google Drive'),'success');
+      loadDriveFiles(token);
+    }catch(e){toast(T2('فشل الاتصال: '+e.message,'Connection failed: '+e.message),'error');}
+  };
+
+  const handleDisconnect=()=>{gdClearToken();setDToken(null);setDriveFiles([]);toast(T2('تم قطع الاتصال','Disconnected'));};
+
+  const handleUploadNow=async()=>{
+    if(!dToken){toast(T2('غير متصل','Not connected'),'warning');return;}
+    setDriveUploading(true);
+    try{
+      const d={};for(const s of ST)d[s]=data[s]||[];
+      d._settings={language:lang,theme:localStorage.getItem('gt-theme'),rates:localStorage.getItem('gt-rates'),recurringTemplates:localStorage.getItem('mutqin-recurring'),notifSettings:localStorage.getItem('gt-notif'),lastExport:new Date().toISOString()};
+      const json=JSON.stringify(d,null,2);
+      const filename=`mutqin-backup-${new Date().toISOString().slice(0,10)}.json`;
+      await gdUploadBackup(dToken,json,filename);
+      gdSetLastUpload();
+      toast(T2('✅ تم الرفع إلى Google Drive','✅ Uploaded to Google Drive'),'success');
+      loadDriveFiles(dToken);
+    }catch(e){
+      if(e.message&&e.message.includes('401')){gdClearToken();setDToken(null);toast(T2('انتهت الجلسة، أعد الاتصال','Session expired, reconnect'),'error');}
+      else toast(T2('فشل الرفع: '+e.message,'Upload failed: '+e.message),'error');
+    }finally{setDriveUploading(false);}
+  };
+
+  const handleRestoreDrive=async(file)=>{
+    if(!window.confirm(T2(`استعادة نسخة ${file.name}؟ سيتم استبدال كل البيانات الحالية.`,`Restore ${file.name}? This will replace ALL current data.`)))return;
+    try{
+      const json=await gdDownloadFile(dToken,file.id);
+      const imp=JSON.parse(json);
+      for(const s of ST){const db=await(async()=>{return new Promise((r,j)=>{const q=indexedDB.open('GoalTrackerDB');q.onsuccess=()=>r(q.result);q.onerror=()=>j(q.error);})})();await new Promise((r,j)=>{const tx=db.transaction(s,'readwrite');tx.objectStore(s).clear();tx.oncomplete=r;tx.onerror=j;});if(imp[s])for(const it of imp[s])await new Promise((r,j)=>{const q=indexedDB.open('GoalTrackerDB');q.onsuccess=()=>{const tx=q.result.transaction(s,'readwrite');tx.objectStore(s).put(it);tx.oncomplete=r;};q.onerror=j;});}
+      toast(T2('🎉 تم استعادة البيانات من Drive!','🎉 Data restored from Drive!'),'success');
+      onClose();
+      setTimeout(()=>window.location.reload(),800);
+    }catch(e){toast(T2('فشل الاستعادة','Restore failed'),'error');}
+  };
+
+  const handleDeleteDrive=async(file)=>{
+    if(!window.confirm(T2(`حذف ${file.name} من Drive؟`,`Delete ${file.name} from Drive?`)))return;
+    try{await gdDeleteFile(dToken,file.id);toast(T2('تم الحذف','Deleted'));loadDriveFiles(dToken);}
+    catch(e){toast(T2('فشل الحذف','Delete failed'),'error');}
+  };
+
+  useEffect(()=>{if(tab==='drive'&&dToken&&driveFiles.length===0)loadDriveFiles(dToken);},[tab]);
+
+  const tabStyle=(id)=>({padding:'8px 16px',borderRadius:10,fontWeight:700,fontSize:13,border:'none',cursor:'pointer',background:tab===id?'var(--teal)':'transparent',color:tab===id?'white':'var(--text2)',transition:'all .15s'});
+
+  return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:460,maxHeight:'92dvh',display:'flex',flexDirection:'column',padding:0,overflow:'hidden'}}>
+    {/* Header */}
+    <div style={{padding:'18px 20px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center',flexShrink:0}}>
+      <h3 style={{fontSize:16,fontWeight:800}}>🛡️ {T2('خزينة النسخ الاحتياطية','Backup Vault')}</h3>
+      <button className="btn btn-ghost btn-icon-xs" onClick={onClose}>✕</button>
+    </div>
+
+    {/* Tabs */}
+    <div style={{display:'flex',gap:4,padding:'12px 20px 0',flexShrink:0,borderBottom:'1px solid var(--border)',paddingBottom:12}}>
+      <button style={tabStyle('local')} onClick={()=>setTab('local')}>📦 {T2('محلي','Local')}</button>
+      <button style={tabStyle('drive')} onClick={()=>setTab('drive')}>
+        ☁️ Google Drive {dToken&&<span style={{fontSize:10,background:'var(--lime)',color:'#000',borderRadius:4,padding:'1px 5px',marginRight:4,fontWeight:700}}>ON</span>}
+      </button>
+    </div>
+
+    <div style={{overflowY:'auto',flex:1,padding:20,display:'flex',flexDirection:'column',gap:14}}>
+
+      {tab==='local'&&<>
+        {/* Status cards */}
+        <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
+          <div style={{padding:12,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+            <div style={{fontSize:10,color:'var(--text2)',fontWeight:700,marginBottom:4}}>💾 {T2('آخر تصدير','Last Export')}</div>
+            <div style={{fontSize:13,fontWeight:800,color:lastExp?'var(--lime)':'var(--coral)'}}>{lastExp?new Date(lastExp).toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short'}):T2('لم يتم','Never')}</div>
+          </div>
+          <div style={{padding:12,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+            <div style={{fontSize:10,color:'var(--text2)',fontWeight:700,marginBottom:4}}>🔄 {T2('نسخة تلقائية','Auto Snapshot')}</div>
+            <div style={{fontSize:13,fontWeight:800,color:'var(--teal)'}}>{autoDate?new Date(autoDate).toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short'}):'-'}</div>
+            {autoCount&&<div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>{autoCount} {T2('عنصر','items')}</div>}
+          </div>
+        </div>
+        {/* Actions */}
+        <div style={{display:'flex',gap:8}}>
+          <button className="btn btn-teal btn-sm" style={{flex:1}} onClick={handleExport}>📤 {T2('تصدير JSON','Export JSON')}</button>
+          <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>{const d=localStorage.getItem('gt-auto-backup');if(!d){toast(T2('لا توجد نسخة','No snapshot'),'warning');return;}const b=new Blob([d],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='mutqin-auto-backup.json';a.click();}}>💾 {T2('تحميل التلقائية','Download Auto')}</button>
+        </div>
+        {/* Snapshots */}
+        <div>
+          <div style={{fontSize:12,fontWeight:800,color:'var(--text2)',marginBottom:8}}>📅 {T2('نقاط الاستعادة','Recovery Points')} (7 {T2('أيام','days')})</div>
+          {!snaps.length?<div style={{textAlign:'center',padding:'20px 0',color:'var(--text2)',fontSize:13}}>🌱 {T2('ستُبنى تلقائياً عند الاستخدام اليومي','Built automatically with daily use')}</div>
+          :snaps.map(s=>(<div key={s.key} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',marginBottom:6}}>
+            <div style={{fontSize:18}}>📦</div>
+            <div style={{flex:1}}><div style={{fontWeight:700,fontSize:13}}>{new Date(s.date+'T12:00').toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{weekday:'short',day:'numeric',month:'short'})}</div><div style={{fontSize:11,color:'var(--text2)'}}>{s.count} {T2('عنصر','items')}</div></div>
+            <button className="btn btn-ghost btn-xs" onClick={()=>handleDownloadSnapshot(s.key,s.date)}>💾</button>
+            <button className="btn btn-ghost btn-xs" style={{color:'var(--teal)'}} onClick={()=>{if(window.confirm(T2(`استعادة ${s.date}؟`,`Restore ${s.date}?`)))handleRestoreSnapshot(s.key).then(onClose);}}>🔄</button>
+          </div>))}
+        </div>
+      </>}
+
+      {tab==='drive'&&<>
+        {/* Google Drive Setup */}
+        {!dToken?(<div style={{display:'flex',flexDirection:'column',gap:12}}>
+          {/* Setup instructions */}
+          <div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)',fontSize:12,lineHeight:1.9}}>
+            <div style={{fontWeight:800,fontSize:13,marginBottom:8}}>⚙️ {T2('إعداد Google Drive','Setup Google Drive')}</div>
+            <div style={{color:'var(--text2)'}}>
+              <div>1. {T2('افتح','Go to')} <a href="https://console.cloud.google.com" target="_blank" rel="noreferrer" style={{color:'var(--teal)'}}>console.cloud.google.com</a></div>
+              <div>2. {T2('أنشئ مشروعاً جديداً','Create a new project')}</div>
+              <div>3. {T2('فعّل Google Drive API','Enable Google Drive API')}</div>
+              <div>4. {T2('APIs & Services → Credentials → Create OAuth Client ID','APIs & Services → Credentials → Create OAuth Client ID')}</div>
+              <div>5. {T2('اختر "Web application" وأضف رابط التطبيق كـ Authorized origin','Choose "Web application", add app URL as authorized origin')}</div>
+              <div>6. {T2('انسخ الـ Client ID وضعه هنا','Copy the Client ID and paste it below')}</div>
+            </div>
+          </div>
+          <div>
+            <div style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:6}}>Client ID</div>
+            {editingId||!clientId?
+              <input className="field" placeholder="xxxx.apps.googleusercontent.com" value={clientId} onChange={e=>setClientId(e.target.value)} style={{fontSize:12,fontFamily:'monospace'}}/>
+              :<div style={{display:'flex',gap:8,alignItems:'center'}}>
+                <div style={{flex:1,padding:'8px 12px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',fontSize:12,fontFamily:'monospace',overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{clientId}</div>
+                <button className="btn btn-ghost btn-xs" onClick={()=>setEditingId(true)}>✏️</button>
+              </div>
+            }
+          </div>
+          <button className="btn btn-teal" style={{width:'100%'}} onClick={handleConnect}>
+            <span style={{fontSize:18}}>☁️</span> {T2('اتصال بـ Google Drive','Connect to Google Drive')}
+          </button>
+        </div>)
+        :(<div style={{display:'flex',flexDirection:'column',gap:12}}>
+          {/* Connected header */}
+          <div style={{display:'flex',alignItems:'center',justifyContent:'space-between',padding:'10px 14px',borderRadius:12,background:'rgba(34,197,94,.1)',border:'1px solid var(--lime)'}}>
+            <div style={{display:'flex',alignItems:'center',gap:8}}>
+              <span style={{fontSize:20}}>☁️</span>
+              <div>
+                <div style={{fontWeight:800,fontSize:13,color:'var(--lime)'}}>Google Drive {T2('متصل','Connected')}</div>
+                {lastUpload&&<div style={{fontSize:11,color:'var(--text2)'}}>{T2('آخر رفع','Last upload')}: {new Date(lastUpload).toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>}
+              </div>
+            </div>
+            <button className="btn btn-ghost btn-xs" style={{color:'var(--coral)'}} onClick={handleDisconnect}>{T2('قطع','Disconnect')}</button>
+          </div>
+
+          {/* Upload now */}
+          <button className="btn btn-teal" style={{width:'100%'}} onClick={handleUploadNow} disabled={driveUploading}>
+            {driveUploading?<span>⏳ {T2('جاري الرفع...','Uploading...')}</span>:<span>☁️ {T2('رفع نسخة الآن','Upload Backup Now')}</span>}
+          </button>
+
+          {/* Drive files list */}
+          <div>
+            <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+              <div style={{fontSize:12,fontWeight:800,color:'var(--text2)'}}>📁 {T2('النسخ في Drive','Backups in Drive')}</div>
+              <button className="btn btn-ghost btn-xs" onClick={()=>loadDriveFiles(dToken)}>🔄</button>
+            </div>
+            {driveLoading?<div style={{textAlign:'center',padding:20,color:'var(--text2)',fontSize:13}}>⏳ {T2('تحميل...','Loading...')}</div>
+            :!driveFiles.length?<div style={{textAlign:'center',padding:20,color:'var(--text2)',fontSize:13}}>☁️ {T2('لا توجد نسخ في Drive بعد','No backups in Drive yet')}</div>
+            :driveFiles.map(f=>(<div key={f.id} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',marginBottom:6}}>
+              <div style={{fontSize:18}}>📄</div>
+              <div style={{flex:1,minWidth:0}}>
+                <div style={{fontWeight:700,fontSize:12,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{f.name}</div>
+                <div style={{fontSize:10,color:'var(--text2)'}}>{f.createdTime?new Date(f.createdTime).toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',year:'numeric',hour:'2-digit',minute:'2-digit'}):''} {f.size?'· '+gdFmtSize(parseInt(f.size)):''}</div>
+              </div>
+              <button className="btn btn-teal btn-xs" onClick={()=>handleRestoreDrive(f)} title={T2('استعادة','Restore')}>🔄</button>
+              <button className="btn btn-ghost btn-xs" style={{color:'var(--coral)'}} onClick={()=>handleDeleteDrive(f)} title={T2('حذف','Delete')}>🗑️</button>
+            </div>))}
+          </div>
+
+          {/* Info note */}
+          <div style={{padding:10,borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',fontSize:11,color:'var(--text2)',lineHeight:1.6}}>
+            📁 {T2('النسخ محفوظة في مجلد "Mutqin Backups" في Drive الخاص بك','Backups saved in "Mutqin Backups" folder in your Drive')}
+          </div>
+        </div>)}
+      </>}
+    </div>
+  </div></div>);
+}
+
+// ============================================================
+// GOOGLE DRIVE INTEGRATION
+// ============================================================
+const GD_SCOPE = 'https://www.googleapis.com/auth/drive.file';
+const GD_FOLDER_NAME = 'Mutqin Backups';
+
+function gdGetClientId(){ return localStorage.getItem('gt-gd-client-id')||''; }
+function gdSaveClientId(id){ localStorage.setItem('gt-gd-client-id', id); }
+function gdGetToken(){ try{ const t=JSON.parse(localStorage.getItem('gt-gd-token')||'null'); if(!t)return null; if(Date.now()>t.expires)return null; return t.access_token; }catch(e){return null;} }
+function gdSaveToken(t){ localStorage.setItem('gt-gd-token', JSON.stringify({access_token:t.access_token,expires:Date.now()+(t.expires_in-60)*1000})); }
+function gdClearToken(){ localStorage.removeItem('gt-gd-token'); }
+function gdGetLastUpload(){ return localStorage.getItem('gt-gd-last-upload')||null; }
+function gdSetLastUpload(){ localStorage.setItem('gt-gd-last-upload', new Date().toISOString()); }
+
+async function gdAuth(clientId){
+  return new Promise((resolve,reject)=>{
+    if(!window.google||!window.google.accounts){ reject(new Error('Google SDK not loaded')); return; }
+    const client = window.google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: GD_SCOPE,
+      callback: (resp) => {
+        if(resp.error){ reject(new Error(resp.error)); return; }
+        gdSaveToken(resp);
+        resolve(resp.access_token);
+      }
+    });
+    client.requestAccessToken();
+  });
+}
+
+async function gdGetOrCreateFolder(token){
+  // Search for existing folder
+  const q = encodeURIComponent(`name='${GD_FOLDER_NAME}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name)`,{
+    headers:{ Authorization:`Bearer ${token}` }
+  });
+  const data = await res.json();
+  if(data.files&&data.files.length>0) return data.files[0].id;
+  // Create folder
+  const cr = await fetch('https://www.googleapis.com/drive/v3/files',{
+    method:'POST',
+    headers:{ Authorization:`Bearer ${token}`, 'Content-Type':'application/json' },
+    body: JSON.stringify({ name:GD_FOLDER_NAME, mimeType:'application/vnd.google-apps.folder' })
+  });
+  const folder = await cr.json();
+  return folder.id;
+}
+
+async function gdUploadBackup(token, jsonStr, filename){
+  const folderId = await gdGetOrCreateFolder(token);
+  const metadata = { name:filename, mimeType:'application/json', parents:[folderId] };
+  const form = new FormData();
+  form.append('metadata', new Blob([JSON.stringify(metadata)],{type:'application/json'}));
+  form.append('file', new Blob([jsonStr],{type:'application/json'}));
+  const res = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,createdTime,size',{
+    method:'POST', headers:{ Authorization:`Bearer ${token}` }, body:form
+  });
+  return await res.json();
+}
+
+async function gdListBackups(token){
+  const folderId = await gdGetOrCreateFolder(token);
+  const q = encodeURIComponent(`'${folderId}' in parents and trashed=false and mimeType='application/json'`);
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,createdTime,size)&orderBy=createdTime desc&pageSize=10`,{
+    headers:{ Authorization:`Bearer ${token}` }
+  });
+  const data = await res.json();
+  return data.files||[];
+}
+
+async function gdDownloadFile(token, fileId){
+  const res = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`,{
+    headers:{ Authorization:`Bearer ${token}` }
+  });
+  return await res.text();
+}
+
+async function gdDeleteFile(token, fileId){
+  await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}`,{
+    method:'DELETE', headers:{ Authorization:`Bearer ${token}` }
+  });
+}
+
+function gdFmtSize(bytes){
+  if(!bytes) return '';
+  if(bytes<1024) return bytes+'B';
+  if(bytes<1024*1024) return Math.round(bytes/1024)+'KB';
+  return (bytes/1024/1024).toFixed(1)+'MB';
+}
+
 function App(){
   const[lang,setLangState]=useState(()=>localStorage.getItem('gt-lang')||'ar');
   const setLang=useCallback((l)=>{setLangState(l);localStorage.setItem('gt-lang',l);},[]);
@@ -3782,58 +4078,7 @@ function App(){
       {expFromCal&&<ExpenseModal expense={{_isNew:true,date:expFromCal}} categories={data.categories||[]} budgets={data.budgets||[]} language={lang} onSave={async e=>{await handleSaveExpense(e);setExpFromCal(null);}} onClose={()=>setExpFromCal(null)}/>}
       {uploadModal&&<UploadModal language={lang} onImport={handleXlsxImport} onClose={()=>setUploadModal(false)}/>}
       {notifModal&&<NotifSettingsModal language={lang} toast={toast} onClose={()=>setNotifModal(false)}/>}
-      {vaultOpen&&(()=>{const snaps=getLocalSnapshots();const lastExp=localStorage.getItem('gt-last-export');const autoDate=localStorage.getItem('gt-auto-backup-date');const autoCount=localStorage.getItem('gt-auto-backup-count');return(<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:440,maxHeight:'90dvh',overflow:'auto'}}>
-        <div style={{padding:'20px 24px',borderBottom:'1px solid var(--border)',display:'flex',justifyContent:'space-between',alignItems:'center'}}>
-          <h3 style={{fontSize:16,fontWeight:800}}>🛡️ {T('خزينة النسخ الاحتياطية','Backup Vault',lang)}</h3>
-          <button className="btn btn-ghost btn-icon-xs" onClick={()=>setVaultOpen(false)}>✕</button>
-        </div>
-        <div style={{padding:20,display:'flex',flexDirection:'column',gap:14}}>
-          {/* Status summary */}
-          <div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:10}}>
-            <div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
-              <div style={{fontSize:10,color:'var(--text2)',fontWeight:700,marginBottom:4}}>💾 {T('آخر تصدير يدوي','Last Manual Export',lang)}</div>
-              <div style={{fontSize:13,fontWeight:800,color:lastExp?'var(--lime)':'var(--coral)'}}>{lastExp?new Date(lastExp).toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short'}):T('لم يتم بعد','Never',lang)}</div>
-            </div>
-            <div style={{padding:14,borderRadius:12,background:'var(--bg3)',border:'1px solid var(--border)'}}>
-              <div style={{fontSize:10,color:'var(--text2)',fontWeight:700,marginBottom:4}}>🔄 {T('آخر نسخة تلقائية','Last Auto Snapshot',lang)}</div>
-              <div style={{fontSize:13,fontWeight:800,color:'var(--teal)'}}>{autoDate?new Date(autoDate).toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'}):'-'}</div>
-              {autoCount&&<div style={{fontSize:10,color:'var(--text2)',marginTop:2}}>{autoCount} {T('عنصر','items',lang)}</div>}
-            </div>
-          </div>
-          {/* Quick actions */}
-          <div style={{display:'flex',gap:8}}>
-            <button className="btn btn-teal btn-sm" style={{flex:1}} onClick={()=>{handleExport();}}><span>📤</span> {T('تصدير الآن','Export Now',lang)}</button>
-            <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>{
-              // Download the latest auto-backup directly
-              const d=localStorage.getItem('gt-auto-backup');
-              if(!d){toast(T('لا توجد نسخة تلقائية','No auto-backup found',lang),'warning');return;}
-              const b=new Blob([d],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='mutqin-auto-backup.json';a.click();
-            }}>💾 {T('تحميل التلقائية','Download Auto',lang)}</button>
-          </div>
-          {/* Rolling snapshots */}
-          <div>
-            <div style={{fontSize:12,fontWeight:800,color:'var(--text2)',marginBottom:8}}>📅 {T('نقاط استعادة الـ 7 أيام','7-Day Recovery Points',lang)}</div>
-            {!snaps.length?<div style={{textAlign:'center',padding:20,color:'var(--text2)',fontSize:13}}>
-              <div style={{fontSize:32,marginBottom:8}}>🌱</div>
-              {T('ستُبنى النقاط تلقائياً عند فتح التطبيق يومياً','Recovery points build automatically as you use the app daily',lang)}
-            </div>:snaps.map(s=>(
-              <div key={s.key} style={{display:'flex',alignItems:'center',gap:10,padding:'10px 12px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)',marginBottom:6}}>
-                <div style={{fontSize:20}}>📦</div>
-                <div style={{flex:1}}>
-                  <div style={{fontWeight:700,fontSize:13}}>{new Date(s.date+'T12:00').toLocaleDateString(lang==='ar'?'ar-SA':'en-US',{weekday:'short',day:'numeric',month:'short'})}</div>
-                  <div style={{fontSize:11,color:'var(--text2)'}}>{s.count} {T('عنصر','items',lang)}</div>
-                </div>
-                <button className="btn btn-ghost btn-xs" title={T('تحميل','Download',lang)} onClick={()=>handleDownloadSnapshot(s.key,s.date)}>💾</button>
-                <button className="btn btn-ghost btn-xs" title={T('استعادة','Restore',lang)} style={{color:'var(--teal)'}} onClick={()=>{if(window.confirm(T(`استعادة نسخة ${s.date}؟ سيتم استبدال البيانات الحالية.`,`Restore snapshot ${s.date}? Current data will be replaced.`,lang))){handleRestoreSnapshot(s.key).then(()=>setVaultOpen(false));}}}>🔄</button>
-              </div>
-            ))}
-          </div>
-          {/* Advice */}
-          <div style={{padding:12,borderRadius:10,background:'var(--gold-g)',border:'1px solid var(--gold)',fontSize:12,color:'var(--gold)',fontWeight:600,lineHeight:1.7}}>
-            💡 {T('النصيحة: صدّر ملف JSON يدوياً مرة أسبوعياً واحفظه في Google Drive أو iCloud — هذه هي الحماية الأقوى.','Tip: Export a JSON file manually once a week and save it to Google Drive or iCloud — this is your strongest protection.',lang)}
-          </div>
-        </div>
-      </div></div>)})()}
+      {vaultOpen&&<VaultModal lang={lang} toast={toast} onClose={()=>setVaultOpen(false)} handleExport={handleExport} handleImport={handleImport} getLocalSnapshots={getLocalSnapshots} handleDownloadSnapshot={handleDownloadSnapshot} handleRestoreSnapshot={handleRestoreSnapshot} data={data} ST={ST}/>}
       {restorePrompt&&<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400,textAlign:'center',padding:30}}>
         <div style={{fontSize:48,marginBottom:16}}>💾</div>
         <h3 style={{fontSize:18,fontWeight:800,marginBottom:10,color:'var(--gold)'}}>{T('تم العثور على نسخة احتياطية!','Backup Found!',lang)}</h3>
