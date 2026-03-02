@@ -983,11 +983,12 @@ function UploadModal({ language, onImport, onClose }) {
 }
 
 // ========== ITEM MODAL ==========
-function ItemModal({type,editItem,goalId,milestoneId,language,onSave,onClose,allTasks}){
+function ItemModal({type,editItem,goalId,milestoneId,language,onSave,onClose,allTasks,allMilestones,allGoals}){
   const isE=editItem&&editItem.id;
   const defs={goal:{title:'',description:'',icon:'🎯',color:'#FF6B6B',startDate:localDS(),endDate:''},milestone:{title:'',description:'',icon:'📍',dueDate:''},task:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',repeat:'never',repeatStartDate:'',repeatEndDate:'',autoDefer:'none',notes:'',blockedBy:'',tags:[]},quickTask:{title:'',description:'',icon:'✅',dueDate:'',priority:'medium',status:'notStarted',notes:'',tags:[]},meeting:{title:'',description:'',icon:'👥',meetingDate:'',attendees:'',location:'',notes:'',minutes:'',decisions:'',meetingStatus:'scheduled',originalMeetingDate:''}};
-  const[f,setF]=useState({...defs[type],...(editItem||{})});const u=(k,v)=>setF(p=>({...p,[k]:v}));
-  const save=()=>{if(!f.title.trim())return;const now=new Date().toISOString();let item=isE?{...f,updatedAt:now}:{...f,id:uid(),createdAt:now};if(type==='task'&&!isE)item.milestoneId=milestoneId;if(type==='milestone'&&!isE)item.goalId=goalId;onSave(type,item);};
+  const initExtra=type==='task'&&!editItem?.milestoneId&&milestoneId?{milestoneId}:type==='milestone'&&!editItem?.goalId&&goalId?{goalId}:{};
+  const[f,setF]=useState({...defs[type],...initExtra,...(editItem||{})});const u=(k,v)=>setF(p=>({...p,[k]:v}));
+  const save=()=>{if(!f.title.trim())return;const now=new Date().toISOString();let item=isE?{...f,updatedAt:now}:{...f,id:uid(),createdAt:now};if(type==='task'&&!isE&&!item.milestoneId)item.milestoneId=milestoneId;if(type==='milestone'&&!isE&&!item.goalId)item.goalId=goalId;onSave(type,item);};
   const ic=type==='goal'?ICONS.goals:type==='milestone'?ICONS.milestones:type==='meeting'?ICONS.meetings:ICONS.tasks;
   const tn={goal:T('هدف','Goal',language),milestone:T('مرحلة','Milestone',language),task:T('مهمة','Task',language),quickTask:T('مهمة سريعة','Quick Task',language),meeting:T('اجتماع','Meeting',language)};
   const depOptions=(allTasks||[]).filter(t=>t.id!==f.id);
@@ -999,8 +1000,39 @@ function ItemModal({type,editItem,goalId,milestoneId,language,onSave,onClose,all
         <div><span className="label">{T('العنوان','Title',language)} *</span><input className="field" value={f.title} onChange={e=>u('title',e.target.value)} autoFocus/></div>
         <div><span className="label">{T('الوصف','Description',language)}</span><textarea className="field" rows={2} value={f.description} onChange={e=>u('description',e.target.value)}/></div>
         {type==='goal'&&<><div><span className="label">{T('اللون','Color',language)}</span><ColPick sel={f.color} onSel={v=>u('color',v)}/></div><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div><span className="label">{T('البدء','Start',language)}</span><input type="date" className="field" value={f.startDate} onChange={e=>u('startDate',e.target.value)}/></div><div><span className="label">{T('الانتهاء','End',language)}</span><input type="date" className="field" value={f.endDate} onChange={e=>u('endDate',e.target.value)}/></div></div></>}
-        {type==='milestone'&&<div><span className="label">{T('التاريخ','Due',language)}</span><input type="date" className="field" value={f.dueDate||''} onChange={e=>u('dueDate',e.target.value)}/></div>}
+        {type==='milestone'&&<>
+        <div><span className="label">{T('التاريخ','Due',language)}</span><input type="date" className="field" value={f.dueDate||''} onChange={e=>u('dueDate',e.target.value)}/></div>
+        {(allGoals||[]).length>0&&<div>
+          <span className="label">🎯 {T('الهدف المرتبط','Linked Goal',language)}</span>
+          <select className="field" value={f.goalId||goalId||''} onChange={e=>u('goalId',e.target.value)}>
+            <option value="">{T('— بدون هدف —','— No Goal —',language)}</option>
+            {(allGoals||[]).map(g=>(<option key={g.id} value={g.id}>{g.icon} {g.title}</option>))}
+          </select>
+        </div>}
+      </>}
         {(type==='task'||type==='quickTask')&&<><div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12}}><div><span className="label">{T('التاريخ','Due',language)}</span><input type="date" className="field" value={f.dueDate||''} onChange={e=>u('dueDate',e.target.value)}/></div><div><span className="label">{T('الأولوية','Priority',language)}</span><select className="field" value={f.priority} onChange={e=>u('priority',e.target.value)}><option value="low">🟢 {T('منخفضة','Low',language)}</option><option value="medium">🟡 {T('متوسطة','Medium',language)}</option><option value="high">🔴 {T('عالية','High',language)}</option></select></div></div>
+        {(allMilestones||[]).length>0&&<div style={{background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:12,padding:12}}>
+          <span className="label" style={{display:'block',marginBottom:6}}>📍 {T('المرحلة المرتبطة','Linked Milestone',language)}</span>
+          <select className="field" value={f.milestoneId||milestoneId||''} onChange={e=>u('milestoneId',e.target.value)}>
+            <option value="">{T('— بدون مرحلة —','— No Milestone —',language)}</option>
+            {(()=>{
+              const grouped={};
+              (allMilestones||[]).forEach(ms=>{
+                const g=(allGoals||[]).find(g=>g.id===ms.goalId);
+                const gKey=g?g.id:'none';
+                const gLabel=g?`${g.icon} ${g.title}`:T('بدون هدف','No Goal',language);
+                if(!grouped[gKey])grouped[gKey]={label:gLabel,items:[]};
+                grouped[gKey].items.push(ms);
+              });
+              return Object.values(grouped).map(grp=>(
+                <optgroup key={grp.label} label={grp.label}>
+                  {grp.items.map(ms=>(<option key={ms.id} value={ms.id}>{ms.icon} {ms.title}</option>))}
+                </optgroup>
+              ));
+            })()}
+          </select>
+          {f.milestoneId&&f.milestoneId!==(milestoneId||'')&&<div style={{fontSize:10,color:'var(--gold)',fontWeight:700,marginTop:6}}>⚡ {T('سيتم نقل المهمة إلى المرحلة المحددة','Task will be moved to selected milestone',language)}</div>}
+        </div>}
         <div><span className="label">🏷️ {T('الوسوم','Tags',language)}</span><div style={{display:'flex',gap:5,flexWrap:'wrap'}}>{DEF_TAGS.map(tag=>{const sel=(f.tags||[]).includes(tag.id);return(<div key={tag.id} onClick={()=>{const cur=f.tags||[];u('tags',sel?cur.filter(t=>t!==tag.id):[...cur,tag.id]);}} style={{padding:'5px 10px',borderRadius:20,fontSize:11,fontWeight:700,cursor:'pointer',border:`2px solid ${sel?tag.color:'var(--border)'}`,background:sel?tag.color+'22':'transparent',color:sel?tag.color:'var(--text2)',transition:'all .15s'}}>{tag.icon} {language==='ar'?tag.name:tag.nameEn}</div>);})}</div></div>
         {type==='task'&&<><div><span className="label">{T('التكرار','Repeat',language)}</span><select className="field" value={f.repeat||'never'} onChange={e=>u('repeat',e.target.value)}><option value="never">{T('بدون','Never',language)}</option><option value="daily">🔄 {T('يومياً','Daily',language)}</option><option value="weekly">🔄 {T('أسبوعياً','Weekly',language)}</option><option value="monthly">🔄 {T('شهرياً','Monthly',language)}</option></select>{f.repeat&&f.repeat!=='never'&&<div style={{display:'grid',gridTemplateColumns:'1fr 1fr',gap:12,marginTop:12}}><div><span className="label" style={{fontSize:11}}>{T('من','From',language)}</span><input type="date" className="field" value={f.repeatStartDate||''} onChange={e=>u('repeatStartDate',e.target.value)}/></div><div><span className="label" style={{fontSize:11}}>{T('إلى','To',language)}</span><input type="date" className="field" value={f.repeatEndDate||''} onChange={e=>u('repeatEndDate',e.target.value)}/></div></div>}</div>
         {depOptions.length>0&&<div><span className="label">🔗 {T('محجوب بواسطة','Blocked by',language)}</span><select className="field" value={f.blockedBy||''} onChange={e=>u('blockedBy',e.target.value)}><option value="">{T('بدون','None',language)}</option>{depOptions.map(t=>(<option key={t.id} value={t.id}>{t.icon} {t.title}</option>))}</select></div>}
@@ -1088,6 +1120,15 @@ const matchSearch=useCallback((tk)=>{if(!search)return true;const s=search.toLow
 const matchFilter=useCallback((tk)=>{if(filter!=='all'){if(filter==='blocked'){if(!isBlocked(tk))return false;}else{if((tk.status||'notStarted')!==filter)return false;}}if(tagFilter&&!(tk.tags||[]).includes(tagFilter))return false;return true;},[filter,tagFilter,isBlocked]);
 const getMilestones=useCallback((gid)=>{const raw=sortByOrder((data.milestones||[]).filter(m=>m.goalId===gid));return msSort==='none'?raw:sortItems(raw,msSort,'dueDate');},[data.milestones,msSort]);
 const getTasks=useCallback((msid)=>{const raw=sortByOrder((data.tasks||[]).filter(tk=>tk.milestoneId===msid)).filter(tk=>matchSearch(tk)&&matchFilter(tk));return tkSort==='none'?raw:sortItems(raw,tkSort,'dueDate');},[data.tasks,tkSort,matchSearch,matchFilter]);
+const getUnlinkedTasks=useCallback((gid)=>{
+  // Tasks with no milestoneId that belong to this goal's milestones (orphaned/unlinked)
+  const goalMsIds=new Set((data.milestones||[]).filter(m=>m.goalId===gid).map(m=>m.id));
+  return sortByOrder((data.tasks||[]).filter(tk=>{
+    if(tk.milestoneId)return false; // has a milestone
+    // Show if explicitly unlinked (no milestoneId or empty)
+    return !tk.milestoneId;
+  })).filter(tk=>matchSearch(tk)&&matchFilter(tk)).slice(0,50); // cap for perf
+},[data.tasks,data.milestones,matchSearch,matchFilter]);
 return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h2 style={{fontSize:22,fontWeight:900}}>🎯 {T('الأهداف','Goals',language)}</h2><button className="btn btn-coral btn-sm" onClick={()=>onAdd('goal')}>⚡ {T('هدف جديد','New Goal',language)}</button></div>
 {!(data.goals||[]).length&&(<div className="card" style={{padding:'50px 20px',textAlign:'center'}}><div style={{fontSize:56,marginBottom:16}}>🚀</div><p style={{color:'var(--text2)',fontSize:15,fontWeight:600}}>{T('ابدأ رحلتك! أضف أول هدف','Start your journey!',language)}</p></div>)}
 {(data.goals||[]).map(g=>(<div key={g.id} className="card" style={{borderRight:language==='ar'?`4px solid ${g.color}`:'none',borderLeft:language!=='ar'?`4px solid ${g.color}`:'none'}}><div style={{padding:'16px 14px',cursor:'pointer'}} onClick={()=>setEG(eG===g.id?null:g.id)}><div style={{display:'flex',alignItems:'center',gap:12}}><div style={{fontSize:32,width:48,height:48,display:'flex',alignItems:'center',justifyContent:'center',background:`${g.color}22`,borderRadius:14,flexShrink:0}}>{g.icon}</div><div style={{flex:1,minWidth:0}}><h3 style={{fontSize:16,fontWeight:800,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.title}</h3>{g.description&&<p style={{fontSize:12,color:'var(--text2)',marginTop:2,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{g.description}</p>}{(g.startDate||g.endDate)&&<p style={{fontSize:11,color:'var(--text2)',marginTop:4}}>📅 {g.startDate&&new Date(g.startDate).toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'short',day:'numeric'})}{g.startDate&&g.endDate&&' → '}{g.endDate&&new Date(g.endDate).toLocaleDateString(language==='ar'?'ar-SA':'en-US',{month:'short',day:'numeric'})}</p>}</div><Prog progress={gP(g.id)} color={g.color}/></div><div style={{display:'flex',gap:6,marginTop:10,justifyContent:'flex-end'}}><button className="btn btn-ghost btn-xs" onClick={e=>{e.stopPropagation();exportGoalXlsx(g);}}>📤 Excel</button><button className="btn btn-ghost btn-xs" onClick={e=>{e.stopPropagation();onEdit('goal',g);}}>✏️ {T('تعديل','Edit',language)}</button><button className="btn btn-ghost btn-xs" style={{borderColor:'var(--coral)',color:'var(--coral)'}} onClick={e=>{e.stopPropagation();onDelete('goals',g.id,g.title);}}>🗑️</button></div></div>
@@ -1098,7 +1139,20 @@ return(<div style={{display:'flex',flexDirection:'column',gap:16}}><div style={{
 <DragList items={getTasks(ms.id)} onReorder={arr=>onReorder('tasks',arr)} renderItem={(tk,tidx,tDragHandle)=>{const blocked=isBlocked(tk);return(
 <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 0',borderBottom:'1px solid var(--border)',opacity:blocked?.5:1}}>{tDragHandle}<div onClick={()=>{if(!blocked)onStatus('tasks',tk,ns[tk.status]);}} style={{width:26,height:26,borderRadius:8,border:`2px solid ${blocked?'var(--coral)':sc[tk.status]}`,background:tk.status==='complete'?sc.complete:blocked?'var(--coral-g)':'transparent',cursor:blocked?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{tk.status==='complete'?'✓':blocked?'🔒':''}</div><span style={{fontSize:16}}>{tk.icon}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span><span className="badge" style={{background:`${pc[tk.priority]}22`,color:pc[tk.priority]}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}{tk.autoDefer&&tk.autoDefer!=='none'&&<span className="badge" style={{background:'var(--gold-g)',color:'var(--gold)'}}>⏩{tk.deferCount?` ${tk.deferCount}×`:''}</span>}{tk.completedAt&&tk.startedAt&&<span className="badge" style={{background:'var(--lime)22',color:'var(--lime)'}}>⏱️ {fmtDuration(tk.startedAt,tk.completedAt,language)}</span>}{tk.startedAt&&!tk.completedAt&&<span className="badge" style={{background:'var(--teal-g)',color:'var(--teal)'}}>▶ {fmtDuration(tk.startedAt,new Date().toISOString(),language)}</span>}{tk.originalDueDate&&<span className="badge" style={{background:'var(--coral-g)',color:'var(--coral)'}}>📌 {tk.originalDueDate}</span>}{(tk.tags||[]).map(tid=>{const tag=DEF_TAGS.find(t=>t.id===tid);return tag?<span key={tid} className="badge" style={{background:tag.color+'22',color:tag.color}}>{tag.icon} {language==='ar'?tag.name:tag.nameEn}</span>:null;})}{blocked&&<span className="dep-badge">🔗 {depName(tk).slice(0,20)}</span>}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>80?tk.notes.slice(0,80)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('task',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('tasks',tk.id,tk.title)}>🗑️</button></div></div>
 );}}/></div>)}</div>
-)}/></div>)}</div>))}</div>);}
+)}/>{/* closes milestones DragList */}
+{(()=>{const unlinked=(data.tasks||[]).filter(tk=>!tk.milestoneId).filter(tk=>matchSearch(tk)&&matchFilter(tk));if(!unlinked.length)return null;return(<div style={{marginTop:10,padding:12,borderRadius:12,background:'var(--bg3)',border:'1px dashed var(--border)'}}>
+  <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:8}}>
+    <span style={{fontSize:12,color:'var(--text2)',fontWeight:700}}>📌 {T('مهام بدون مرحلة','Tasks without milestone',language)} ({unlinked.length})</span>
+    <button className="btn btn-teal btn-xs" onClick={()=>onAdd('task',null,null)}>⚡ {T('مهمة','Task',language)}</button>
+  </div>
+  {unlinked.map(tk=>{const blocked=isBlocked(tk);return(<div key={tk.id} style={{display:'flex',alignItems:'center',gap:8,padding:'7px 0',borderBottom:'1px solid var(--border)',opacity:blocked?.5:1}}>
+    <div onClick={()=>{if(!blocked)onStatus('tasks',tk,ns[tk.status]);}} style={{width:24,height:24,borderRadius:7,border:`2px solid ${blocked?'var(--coral)':sc[tk.status]}`,background:tk.status==='complete'?sc.complete:blocked?'var(--coral-g)':'transparent',cursor:blocked?'not-allowed':'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:12,color:'white',fontWeight:900,flexShrink:0}}>{tk.status==='complete'?'✓':blocked?'🔒':''}</div>
+    <span style={{fontSize:15}}>{tk.icon}</span>
+    <div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:2}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span><span className="badge" style={{background:`${pc[tk.priority]}22`,color:pc[tk.priority]}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>{(tk.tags||[]).map(tid=>{const tag=DEF_TAGS.find(t=>t.id===tid);return tag?<span key={tid} className="badge" style={{background:tag.color+'22',color:tag.color}}>{tag.icon} {language==='ar'?tag.name:tag.nameEn}</span>:null;})}</div></div>
+    <div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('task',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('tasks',tk.id,tk.title)}>🗑️</button></div>
+  </div>);})}
+</div>);})()}
+</div>)}</div>))}</div>);}
 
 // ========== MEETINGS PAGE ==========
 function relativeTime(dateStr, language){
@@ -2062,7 +2116,7 @@ new Chart(document.getElementById('timelineChart'),{
     // Popup blocked — fallback: download as HTML file
     const blob=new Blob([html],{type:'text/html'});
     const a=document.createElement('a');a.href=URL.createObjectURL(blob);
-    a.download=`budget-report-${b.title}.html`;a.click();
+    a.download=`budget-report-${b.title}.html`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),100);
     return;
   }
   win.document.write(html);
@@ -3575,7 +3629,7 @@ function VaultModal({lang,toast,onClose,handleExport,handleImport,getLocalSnapsh
         {/* Actions */}
         <div style={{display:'flex',gap:8}}>
           <button className="btn btn-teal btn-sm" style={{flex:1}} onClick={handleExport}>📤 {T2('تصدير JSON','Export JSON')}</button>
-          <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>{const d=localStorage.getItem('gt-auto-backup');if(!d){toast(T2('لا توجد نسخة','No snapshot'),'warning');return;}const b=new Blob([d],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='mutqin-auto-backup.json';a.click();}}>💾 {T2('تحميل التلقائية','Download Auto')}</button>
+          <button className="btn btn-ghost btn-sm" style={{flex:1}} onClick={()=>{const d=localStorage.getItem('gt-auto-backup');if(!d){toast(T2('لا توجد نسخة','No snapshot'),'warning');return;}const b=new Blob([d],{type:'application/json'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download='mutqin-auto-backup.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),100);}}>💾 {T2('تحميل التلقائية','Download Auto')}</button>
         </div>
         {/* Snapshots */}
         <div>
@@ -3788,7 +3842,29 @@ function App(){
   const handleInstall=useCallback(async()=>{if(!installPrompt)return;installPrompt.prompt();const{outcome}=await installPrompt.userChoice;if(outcome==='accepted')toast(T('تم التثبيت! 📱','Installed! 📱',lang));setInstallPrompt(null);},[installPrompt,toast,lang]);
 
   const load=useCallback(async()=>{
-    const d={};for(const s of ST)d[s]=await dAll(s);setData(d);
+    const d={};for(const s of ST)d[s]=await dAll(s);
+    // Auto-clean orphaned tasks (milestoneId → milestone that no longer exists)
+    const msIds=new Set((d.milestones||[]).map(m=>m.id));
+    const goalIds=new Set((d.goals||[]).map(g=>g.id));
+    let orphansFixed=0;
+    for(const tk of(d.tasks||[])){
+      if(tk.milestoneId&&!msIds.has(tk.milestoneId)){
+        await dPut('tasks',{...tk,milestoneId:''});
+        orphansFixed++;
+      }
+    }
+    // Also clean orphaned milestones (goalId → goal that no longer exists)
+    for(const ms of(d.milestones||[])){
+      if(ms.goalId&&!goalIds.has(ms.goalId)){
+        await dPut('milestones',{...ms,goalId:''});
+        orphansFixed++;
+      }
+    }
+    if(orphansFixed>0){
+      // Re-read after cleanup
+      for(const s of['tasks','milestones'])d[s]=await dAll(s);
+    }
+    setData(d);
     // Auto-backup: rolling 7-day daily snapshots
     try{
       const total=Object.values(d).reduce((s,a)=>s+a.length,0);
@@ -3936,7 +4012,7 @@ function App(){
     };
     const b=new Blob([JSON.stringify(d,null,2)],{type:'application/json'});
     const a=document.createElement('a');a.href=URL.createObjectURL(b);
-    a.download=`mutqin-backup-${localDS()}.json`;a.click();
+    a.download=`mutqin-backup-${localDS()}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),100);
     localStorage.setItem('gt-last-export',new Date().toISOString());
     toast(T('تم تصدير كل البيانات 📤','All data exported 📤',lang));
   },[lang,toast]);
@@ -3968,13 +4044,13 @@ function App(){
       if(!data)return;
       const b=new Blob([data],{type:'application/json'});
       const a=document.createElement('a');a.href=URL.createObjectURL(b);
-      a.download=`mutqin-snap-${date}.json`;a.click();
+      a.download=`mutqin-snap-${date}.json`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),100);
     }catch(e){}
   },[]);
 
   const[vaultOpen,setVaultOpen]=useState(false);
 
-  const handleCalExport=useCallback(()=>{const{content,count}=generateICS(data,lang);if(!count){toast(T('لا توجد مهام بتاريخ للتصدير','No dated tasks to export',lang),'warning');return;}const b=new Blob([content],{type:'text/calendar;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`goal-tracker-${localDS()}.ics`;a.click();toast(T(`تم تصدير ${count} حدث للتقويم 📅`,`Exported ${count} events to calendar 📅`,lang));},[data,lang,toast]);
+  const handleCalExport=useCallback(()=>{const{content,count}=generateICS(data,lang);if(!count){toast(T('لا توجد مهام بتاريخ للتصدير','No dated tasks to export',lang),'warning');return;}const b=new Blob([content],{type:'text/calendar;charset=utf-8'});const a=document.createElement('a');a.href=URL.createObjectURL(b);a.download=`goal-tracker-${localDS()}.ics`;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),100);toast(T(`تم تصدير ${count} حدث للتقويم 📅`,`Exported ${count} events to calendar 📅`,lang));},[data,lang,toast]);
   const handleImport=useCallback(()=>{const inp=document.createElement('input');inp.type='file';inp.accept='.json';inp.onchange=async e=>{try{const txt=await e.target.files[0].text(),imp=JSON.parse(txt);const doIt=async()=>{
     for(const s of ST){await dClr(s);if(imp[s])for(const it of imp[s])await dPut(s,it);}
     // Restore localStorage settings if present
@@ -4098,7 +4174,7 @@ function App(){
       <Toasts toasts={toasts} onDismiss={id=>setToasts(p=>p.filter(t=>t.id!==id))}/>
       <InAppAlerts language={lang}/>
       {view==='today'&&<Pomodoro language={lang}/>}
-      {modal&&<ItemModal type={modal.type} editItem={modal.editItem} goalId={modal.goalId} milestoneId={modal.milestoneId} language={lang} onSave={handleSave} onClose={()=>setModal(null)} allTasks={data.tasks||[]}/>}
+      {modal&&<ItemModal type={modal.type} editItem={modal.editItem} goalId={modal.goalId} milestoneId={modal.milestoneId} language={lang} onSave={handleSave} onClose={()=>setModal(null)} allTasks={data.tasks||[]} allMilestones={data.milestones||[]} allGoals={data.goals||[]}/>}
       {listModal&&<ListModal editList={listModal.id?listModal:null} language={lang} onSave={handleSaveListModal} onClose={()=>setListModal(null)}/>}
       {confirm&&<Confirm message={confirm.message} language={lang} onOk={confirm.onOk} onCancel={()=>setConfirm(null)}/>}
       {dayView&&<DayMod dateStr={dayView.dateStr} items={dayView.items} language={lang} onClose={()=>setDayView(null)} onAddTask={d=>handleAddFromDay('quickTask',d)} onAddMeeting={d=>handleAddFromDay('meeting',d)} onAddExpense={d=>{setDayView(null);setExpFromCal(d);}} onStatus={async(store,item,ns)=>{await handleStatus(store,item,ns);const ds=dayView.dateStr;const nd=await dAll('tasks'),nq=await dAll('quickTasks'),nm=await dAll('meetings');const ni=[];nd.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'task'});});nq.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'quickTask'});});nm.forEach(x=>{if(x.meetingDate&&x.meetingDate.startsWith(ds))ni.push({...x,_type:'meeting'});});setDayView({dateStr:ds,items:ni});}} onReorder={async(store,items)=>{await handleReorder(store,items);const ds=dayView.dateStr;const nd=await dAll('tasks'),nq=await dAll('quickTasks'),nm=await dAll('meetings');const ni=[];nd.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'task'});});nq.forEach(x=>{if(x.dueDate&&x.dueDate.startsWith(ds))ni.push({...x,_type:'quickTask'});});nm.forEach(x=>{if(x.meetingDate&&x.meetingDate.startsWith(ds))ni.push({...x,_type:'meeting'});});setDayView({dateStr:ds,items:ni});}}/>}
