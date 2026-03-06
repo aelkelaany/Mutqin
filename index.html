@@ -3225,12 +3225,20 @@ function PrayerModal({prayers,language,city,onClose}){
 
   const fmtCountdown=(secs)=>{if(secs<=0)return'';const h=Math.floor(secs/3600),m=Math.floor((secs%3600)/60),s=secs%60;if(h>0)return language==='ar'?`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')} س`:`${h}:${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;return `${String(m).padStart(2,'0')}:${String(s).padStart(2,'0')}`;};
 
-  // ── Find next prayer ──
+  // ── Find next prayer (loops to Fajr after Isha) ──
   const now=new Date();
   let nextPrayer=null,nextSecs=0;
   for(const r of rows){
     const secs=getSecsLeft(prayers[r.k]);
     if(secs>0){nextPrayer={...r,time:prayers[r.k]};nextSecs=secs;break;}
+  }
+  // After all prayers passed → loop to Fajr tomorrow
+  if(!nextPrayer&&prayers['Fajr']){
+    const fajrRow=rows[0];
+    const[h,m]=prayers['Fajr'].split(':').map(Number);
+    const tomorrow=new Date(now);tomorrow.setDate(tomorrow.getDate()+1);tomorrow.setHours(h,m,0,0);
+    nextSecs=Math.floor((tomorrow-now)/1000);
+    nextPrayer={...fajrRow,time:prayers['Fajr']};
   }
 
   // ── Progress ring for countdown ──
@@ -3296,7 +3304,7 @@ function PrayerModal({prayers,language,city,onClose}){
     </div>
 
     <div style={{padding:'10px 16px 14px',borderTop:'1px solid var(--border)',display:'flex',justifyContent:'center',flexShrink:0,direction:'ltr'}}>
-      <button className="btn btn-ghost btn-sm" style={{minWidth:140}} onClick={onClose}>{T('إغلاق','Close',language)}</button>
+      <button className="btn btn-ghost btn-sm" style={{minWidth:140,textAlign:'center',justifyContent:'center'}} onClick={onClose}>{T('إغلاق','Close',language)}</button>
     </div>
   </div></div>);
 }
