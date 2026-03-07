@@ -2369,7 +2369,9 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
     else if(dateRange==='year'){from=new Date(now.getFullYear(),0,1);to=now;}
     else if(dateRange==='custom'&&customFrom&&customTo){from=new Date(customFrom);to=new Date(customTo);to.setHours(23,59,59);}
     else{from=new Date(0);to=now;}
-    return allExp.filter(e=>{const d=new Date(e.date);return d>=from&&d<=to;}).filter(e=>!expSearch||((e.title||'').toLowerCase().includes(expSearch.toLowerCase()))).sort((a,b)=>new Date(b.date)-new Date(a.date));
+    const sq=expSearch.trim().toLowerCase();
+    if(sq){return allExp.filter(e=>(e.title||'').toLowerCase().includes(sq)||(e.notes||'').toLowerCase().includes(sq)||(e.category||'').toLowerCase().includes(sq)).sort((a,b)=>new Date(b.date)-new Date(a.date));}
+    return allExp.filter(e=>{const d=new Date(e.date);return d>=from&&d<=to;}).sort((a,b)=>new Date(b.date)-new Date(a.date));
   },[allExp,dateRange,customFrom,customTo,expSearch]);
 
   // analyticsFiltered: same date range as filtered but from analyticsExp (for charts/totals)
@@ -4319,7 +4321,7 @@ function App(){
     }catch(e){toast(T('خطأ في الاستعادة','Restore error',lang),'error');}
   },[load,toast,lang]);
   useEffect(()=>{document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';},[lang]);
-  useEffect(()=>{document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('gt-theme',theme);},[theme]);
+  useEffect(()=>{document.documentElement.className=theme==='light'?'light':'';localStorage.setItem('gt-theme',theme);},[theme]);
   useNotifications(data,lang);
 
   // Auto-defer overdue tasks (runs once after initial load)
@@ -4511,7 +4513,6 @@ function App(){
           <nav className="dnav" style={{gap:4}}>{navs.map(n=>(<div key={n.id} className={`dnav-item ${view===n.id?'active':''}`} onClick={()=>setView(n.id)}><span>{n.icon}</span><span>{n.label}</span></div>))}</nav>
           <div style={{display:'flex',alignItems:'center',gap:2,flexShrink:0}}>
             {installPrompt&&<button className="btn btn-coral btn-sm hidden sm:flex" onClick={handleInstall} style={{fontSize:12,padding:'6px 12px',animation:'pulse 2s infinite'}}>📲 {T('ثبّت التطبيق','Install App',lang)}</button>}
-            <button className="btn btn-ghost btn-icon-sm" title={T('بحث شامل','Global Search',lang)} onClick={()=>{setView('today');setTimeout(()=>todaySearchRef.current?.focus(),150);}} style={{position:'relative'}}>🔍</button>
             <button className="btn btn-ghost btn-icon-sm" title={T('الإشعارات','Notifications',lang)} onClick={()=>setNotifModal(true)} style={{position:'relative'}}>🔔{getNotifSettings().enabled&&<div style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'var(--teal)',border:'2px solid var(--bg2)'}}/>}</button>
             <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={theme==='dark'?T('الوضع الفاتح','Light Mode',lang):T('الوضع الداكن','Dark Mode',lang)} onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'☀️':'🌙'}</button>
             <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={previewMode==='desktop'?T('معاينة الجوال','Mobile Preview',lang):T('معاينة سطح المكتب','Desktop View',lang)} onClick={()=>setPreviewMode(p=>p==='desktop'?'mobile':'desktop')} style={{fontSize:16}}>{previewMode==='desktop'?'📱':'💻'}</button>
