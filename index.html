@@ -297,6 +297,23 @@ select.field{appearance:none;background-image:url("data:image/svg+xml,%3Csvg xml
 </style>
 </head>
 <body>
+<!-- SPLASH -->
+<div id="splash" style="position:fixed;inset:0;background:#0f1117;display:flex;flex-direction:column;align-items:center;justify-content:center;z-index:99999;font-family:'IBM Plex Arabic',sans-serif;gap:18px;">
+  <div style="font-size:52px;animation:spin 2s linear infinite;">🎯</div>
+  <div style="font-size:22px;font-weight:800;color:#e8d5a3;letter-spacing:1px;">متقن</div>
+  <div style="width:180px;height:4px;background:#1e2535;border-radius:99px;overflow:hidden;"><div id="splash-bar" style="height:100%;background:linear-gradient(90deg,#2dd4bf,#e8d5a3);border-radius:99px;width:0%;transition:width .3s;"></div></div>
+  <div id="splash-msg" style="font-size:12px;color:#64748b;">جاري التحميل...</div>
+</div>
+<style>@keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}</style>
+<script>
+var pct=0,bar=document.getElementById("splash-bar"),msg=document.getElementById("splash-msg");
+var msgs=["جاري تحميل المكتبات...","جاري تهيئة قاعدة البيانات...","جاري تحضير الواجهة...","تقريباً جاهز..."];
+var iv=setInterval(function(){pct=Math.min(pct+(Math.random()*8+2),88);bar.style.width=pct+"%";msg.textContent=msgs[Math.floor(pct/25)]||msgs[3];},200);
+window._splashInterval=iv;
+window._hideSplash=function(){clearInterval(iv);bar.style.width="100%";setTimeout(function(){var s=document.getElementById("splash");if(s){s.style.transition="opacity .4s";s.style.opacity="0";setTimeout(function(){s.remove();},400);}},150);};
+history.pushState({mutqin:true},"",location.href);
+window.addEventListener("popstate",function(){history.pushState({mutqin:true},"",location.href);window.dispatchEvent(new CustomEvent("mutqin-back"));});
+</script>
 <div id="root"></div>
 <script type="text/babel">
 const{useState,useEffect,useCallback,useMemo,useRef}=React;
@@ -2225,6 +2242,8 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
   const[mgtMode,setMgtMode]=useState(false);
   const[rateData,setRateData]=useState(()=>getStoredRates());
   const[rateLoading,setRateLoading]=useState(false);
+  const[convAmt,setConvAmt]=useState('');
+  const[convFrom,setConvFrom]=useState('');
   const[selBudget,setSelBudget]=useState(null);
   const[expandedCats,setExpandedCats]=useState({});
   const[budMenuOpen,setBudMenuOpen]=useState(false);
@@ -2467,6 +2486,42 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
             </div>);})}
         </div>
         {rateData.updated&&<div style={{fontSize:10,color:'var(--text2)',marginTop:6,textAlign:'center'}}>✅ {T('آخر تحديث: ','Last update: ',language)}{new Date(rateData.updated).toLocaleDateString(language==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>}
+        {/* ── CURRENCY CONVERTER ── */}
+        <div style={{marginTop:14,borderTop:'1px solid var(--border)',paddingTop:12}}>
+          <div style={{fontSize:11,fontWeight:800,color:'var(--text2)',marginBottom:8,display:'flex',alignItems:'center',gap:6}}>⚡ {T('محوّل العملات السريع','Quick Currency Converter',language)}</div>
+          <div style={{display:'flex',gap:6,alignItems:'center',marginBottom:10}}>
+            <select value={convFrom||baseCur} onChange={e=>setConvFrom(e.target.value)} style={{padding:'7px 8px',borderRadius:8,border:'1px solid var(--border)',background:'var(--bg2)',color:'var(--text)',fontSize:13,fontWeight:700,cursor:'pointer',flex:'0 0 auto'}}>
+              {CURRENCIES.map(c=><option key={c.code} value={c.code}>{c.icon} {c.code}</option>)}
+            </select>
+            <input type="number" min="0" value={convAmt} onChange={e=>setConvAmt(e.target.value)}
+              placeholder="0"
+              style={{flex:1,padding:'7px 10px',borderRadius:8,border:'2px solid var(--teal)',background:'var(--bg2)',color:'var(--text)',fontSize:15,fontWeight:800,textAlign:'center',outline:'none'}}/>
+            {convAmt&&<span style={{cursor:'pointer',color:'var(--text3)',fontSize:13}} onClick={()=>setConvAmt('')}>✕</span>}
+          </div>
+          {convAmt&&parseFloat(convAmt)>0&&(()=>{
+            const fromCode=convFrom||baseCur;
+            const amt=parseFloat(convAmt);
+            const fromRate=rates[fromCode]||1;
+            return(
+              <div style={{display:'flex',flexDirection:'column',gap:5}}>
+                {CURRENCIES.filter(c=>c.code!==fromCode).map(c=>{
+                  const toRate=rates[c.code]||1;
+                  const converted=(amt/fromRate*toRate);
+                  const disp=converted>=1000?converted.toLocaleString('en',{maximumFractionDigits:2}):converted.toFixed(4).replace(/\.?0+$/,'');
+                  return(
+                    <div key={c.code} style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px',borderRadius:10,background:'var(--bg3)',border:'1px solid var(--border)'}}>
+                      <span style={{fontSize:18,flexShrink:0}}>{c.icon}</span>
+                      <span style={{fontWeight:700,fontSize:13,color:'var(--text2)',width:36}}>{c.code}</span>
+                      <span style={{flex:1,textAlign:'start'}}/>
+                      <span style={{fontWeight:800,fontSize:16,color:'var(--teal)',direction:'ltr'}}>{disp}</span>
+                      <span style={{fontSize:11,color:'var(--text3)',fontWeight:600}}>{c.code}</span>
+                    </div>
+                  );
+                })}
+              </div>
+            );
+          })()}
+        </div>
       </div>
     </div>}
 
@@ -3912,115 +3967,148 @@ function highlight(text, query) {
   return (<span>{String(text).slice(0, idx)}<mark style={{background:'var(--gold)',color:'var(--navy)',borderRadius:3,padding:'0 1px'}}>{String(text).slice(idx, idx+query.length)}</mark>{String(text).slice(idx+query.length)}</span>);
 }
 
-function GlobalSearch({data,language,open,onClose,onNavigate,onEditItem}) {
+function GlobalSearch({data,language,open,onClose,onEditItem}) {
   const[q,setQ]=useState('');
+  const[selected,setSelected]=useState(null); // item shown in detail panel
   const inputRef=useRef(null);
   const T2=(a,e)=>T(a,e,language);
 
-  useEffect(()=>{if(open){setQ('');setTimeout(()=>inputRef.current?.focus(),80);}},[ open]);
+  useEffect(()=>{if(open){setQ('');setSelected(null);setTimeout(()=>inputRef.current?.focus(),80);}},[open]);
   useEffect(()=>{
-    const handler=(e)=>{if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();open?onClose():null;}if(e.key==='Escape'&&open)onClose();};
+    const handler=(e)=>{
+      if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();open?onClose():null;}
+      if(e.key==='Escape'&&open){if(selected)setSelected(null);else onClose();}
+    };
     document.addEventListener('keydown',handler);
     return()=>document.removeEventListener('keydown',handler);
-  },[open,onClose]);
+  },[open,onClose,selected]);
 
   const results=useMemo(()=>{
     const sq=q.trim().toLowerCase();
     if(sq.length<1)return null;
     const match=(val)=>String(val||'').toLowerCase().includes(sq);
-    const score=(item,fields)=>{
-      let s=0;
-      fields.forEach(f=>{const v=String(item[f]||'').toLowerCase();if(v===sq)s+=100;else if(v.startsWith(sq))s+=50;else if(v.includes(sq))s+=10;});
-      return s;
-    };
-    const goals=(data.goals||[]).filter(g=>match(g.title)||match(g.description)||match(g.notes))
-      .map(g=>({...g,_type:'goal',_score:score(g,['title','description'])}));
-    const milestones=(data.milestones||[]).filter(m=>match(m.title)||match(m.description))
-      .map(m=>({...m,_type:'milestone',_score:score(m,['title','description'])}));
-    const tasks=(data.tasks||[]).filter(t=>match(t.title)||match(t.description)||match(t.notes))
-      .map(t=>({...t,_type:'task',_score:score(t,['title','description','notes'])}));
-    const qtasks=(data.quickTasks||[]).filter(t=>match(t.title)||match(t.notes))
-      .map(t=>({...t,_type:'quickTask',_score:score(t,['title'])}));
-    const meetings=(data.meetings||[]).filter(m=>match(m.title)||match(m.description)||match(m.attendees)||match(m.notes)||match(m.minutes))
-      .map(m=>({...m,_type:'meeting',_score:score(m,['title','description','attendees'])}));
-    const expenses=(data.expenses||[]).filter(e=>match(e.title)||match(e.notes)||match(e.category))
-      .map(e=>({...e,_type:'expense',_score:score(e,['title','notes'])}));
-    const notes=(data.notes||[]).filter(n=>match(n.title)||match(n.content)||match(n.body))
-      .map(n=>({...n,_type:'note',_score:score(n,['title','content','body'])}));
-    return{tasks:[...tasks,...qtasks].sort((a,b)=>b._score-a._score),meetings,goals:[...goals,...milestones],expenses,notes,
-      total:tasks.length+qtasks.length+meetings.length+goals.length+milestones.length+expenses.length+notes.length};
+    const score=(item,fields)=>{let s=0;fields.forEach(f=>{const v=String(item[f]||'').toLowerCase();if(v===sq)s+=100;else if(v.startsWith(sq))s+=50;else if(v.includes(sq))s+=10;});return s;};
+    const goals=(data.goals||[]).filter(g=>match(g.title)||match(g.description)||match(g.notes)).map(g=>({...g,_type:'goal',_score:score(g,['title','description'])}));
+    const milestones=(data.milestones||[]).filter(m=>match(m.title)||match(m.description)).map(m=>({...m,_type:'milestone',_score:score(m,['title','description'])}));
+    const tasks=(data.tasks||[]).filter(t=>match(t.title)||match(t.description)||match(t.notes)).map(t=>({...t,_type:'task',_score:score(t,['title','description','notes'])}));
+    const qtasks=(data.quickTasks||[]).filter(t=>match(t.title)||match(t.notes)).map(t=>({...t,_type:'quickTask',_score:score(t,['title'])}));
+    const meetings=(data.meetings||[]).filter(m=>match(m.title)||match(m.description)||match(m.attendees)||match(m.notes)||match(m.minutes)).map(m=>({...m,_type:'meeting',_score:score(m,['title','description','attendees'])}));
+    const expenses=(data.expenses||[]).filter(e=>match(e.title)||match(e.notes)||match(e.category)).map(e=>({...e,_type:'expense',_score:score(e,['title','notes'])}));
+    const notes=(data.notes||[]).filter(n=>match(n.title)||match(n.content)||match(n.body)).map(n=>({...n,_type:'note',_score:score(n,['title','content','body'])}));
+    return{notes,tasks:[...tasks,...qtasks].sort((a,b)=>b._score-a._score),meetings,goals:[...goals,...milestones],expenses,
+      total:notes.length+tasks.length+qtasks.length+meetings.length+goals.length+milestones.length+expenses.length};
   },[q,data]);
+
+  // ── Detail panel for selected item ──
+  const DetailPanel=({item})=>{
+    if(!item)return null;
+    const typeLabel={goal:'🎯 هدف',milestone:'📍 مرحلة',task:'✅ مهمة',quickTask:'⚡ مهمة سريعة',meeting:'👥 اجتماع',expense:'💰 مصروف',note:'📓 ملاحظة'}[item._type]||'';
+    const statusLabel={complete:'مكتمل',inProgress:'جارٍ',partial:'جزئي',notStarted:'لم يبدأ',scheduled:'مجدول',done:'منتهٍ'}[item.status]||item.status||'';
+    const statusColor={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text3)',scheduled:'var(--coral)',done:'var(--text2)'}[item.status]||'var(--text3)';
+    const fields=[];
+    if(item.dueDate)fields.push({icon:'📅',label:T2('تاريخ الاستحقاق','Due'),val:item.dueDate});
+    if(item.meetingDate)fields.push({icon:'📅',label:T2('تاريخ الاجتماع','Date'),val:item.meetingDate?.slice(0,16).replace('T',' ')});
+    if(item.attendees)fields.push({icon:'👤',label:T2('الحضور','Attendees'),val:item.attendees});
+    if(item.location)fields.push({icon:'📍',label:T2('المكان','Location'),val:item.location});
+    if(item.amount)fields.push({icon:'💵',label:T2('المبلغ','Amount'),val:(item.amount)+' '+(item.currency||'')});
+    if(item.category)fields.push({icon:'🏷️',label:T2('الفئة','Category'),val:item.category});
+    if(item.priority)fields.push({icon:'🔺',label:T2('الأولوية','Priority'),val:{high:'عالية',medium:'متوسطة',low:'منخفضة'}[item.priority]||item.priority});
+    const body=item.content||item.body||item.description||item.notes||item.minutes||'';
+    return(
+      <div style={{padding:'18px 20px',borderTop:'1px solid var(--border)',background:'var(--bg3)',borderRadius:'0 0 18px 18px'}}>
+        <div style={{display:'flex',alignItems:'center',gap:8,marginBottom:12}}>
+          <button onClick={()=>setSelected(null)} style={{background:'none',border:'none',cursor:'pointer',color:'var(--text2)',fontSize:16,padding:'2px 6px',borderRadius:6}}>←</button>
+          <span style={{fontSize:12,color:'var(--text2)',fontWeight:600}}>{typeLabel}</span>
+          {statusLabel&&<span style={{fontSize:11,fontWeight:700,color:statusColor,background:'rgba(0,0,0,.2)',borderRadius:20,padding:'2px 10px'}}>{statusLabel}</span>}
+          <div style={{flex:1}}/>
+          <button onClick={()=>{onEditItem(item._type,item);onClose();}} style={{background:'var(--teal)',color:'#fff',border:'none',borderRadius:8,padding:'5px 14px',cursor:'pointer',fontSize:12,fontWeight:700}}>
+            {T2('تعديل ✏️','Edit ✏️')}
+          </button>
+        </div>
+        <div style={{fontWeight:800,fontSize:15,marginBottom:8}}>{highlight(item.title||item.name,q)}</div>
+        {fields.length>0&&<div style={{display:'flex',flexWrap:'wrap',gap:8,marginBottom:10}}>
+          {fields.map((f,i)=>(
+            <div key={i} style={{background:'var(--bg2)',borderRadius:8,padding:'4px 10px',fontSize:11,display:'flex',gap:4,alignItems:'center'}}>
+              <span>{f.icon}</span><span style={{color:'var(--text2)'}}>{f.label}:</span><span style={{fontWeight:600}}>{f.val}</span>
+            </div>
+          ))}
+        </div>}
+        {body&&<div style={{fontSize:12,color:'var(--text2)',lineHeight:1.7,whiteSpace:'pre-wrap',maxHeight:140,overflowY:'auto',background:'var(--bg2)',borderRadius:8,padding:'10px 12px'}}>
+          {highlight(body.slice(0,500),q)}{body.length>500&&'...'}
+        </div>}
+        {item.tags&&item.tags.length>0&&<div style={{display:'flex',gap:6,marginTop:10,flexWrap:'wrap'}}>
+          {item.tags.map(tag=><span key={tag} style={{background:'var(--gold)',color:'var(--navy)',borderRadius:20,padding:'2px 10px',fontSize:10,fontWeight:700}}>{tag}</span>)}
+        </div>}
+      </div>
+    );
+  };
 
   const Section=({icon,label,items,type})=>{
     if(!items||!items.length)return null;
-    return(<div style={{marginBottom:8}}>
-      <div style={{fontSize:10,fontWeight:800,color:'var(--text2)',padding:'6px 16px 4px',letterSpacing:.5,textTransform:'uppercase',display:'flex',alignItems:'center',gap:6}}>
+    return(<div style={{marginBottom:4}}>
+      <div style={{fontSize:10,fontWeight:800,color:'var(--text2)',padding:'6px 16px 4px',letterSpacing:.5,display:'flex',alignItems:'center',gap:6}}>
         <span>{icon}</span>{label}<span style={{background:'var(--bg3)',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:700}}>{items.length}</span>
       </div>
       {items.slice(0,5).map(item=>{
-        const isTask=type==='task'||type==='quickTask';
-        const isMeeting=type==='meeting';
-        const isGoal=type==='goal'||type==='milestone';
-        const isExp=type==='expense';
-        const isNote=type==='note';
-        const sub=isTask?(item.dueDate?'📅 '+item.dueDate:''):isMeeting?(item.meetingDate?'📅 '+item.meetingDate.slice(0,10):''):isGoal?(item.description?item.description.slice(0,40):''):isExp?((item.amount||0)+' '+(item.currency||'')):isNote?((item.content||item.body||'').slice(0,50)):'';
+        const isExp=item._type==='expense';
+        const sub=item._type==='task'||item._type==='quickTask'?(item.dueDate?'📅 '+item.dueDate:''):item._type==='meeting'?(item.meetingDate?'📅 '+item.meetingDate.slice(0,10):''):item._type==='goal'||item._type==='milestone'?(item.description||'').slice(0,40):isExp?((item.amount||0)+' '+(item.currency||'')):(item.content||item.body||'').slice(0,50);
         const statusColor={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text3)'}[item.status]||'var(--text3)';
+        const isActive=selected&&selected.id===item.id;
         return(
-          <div key={item.id} onClick={()=>{onEditItem(item._type,item);onClose();}}
-            style={{display:'flex',alignItems:'center',gap:10,padding:'9px 16px',cursor:'pointer',transition:'background .1s',borderRadius:0}}
-            onMouseEnter={e=>e.currentTarget.style.background='var(--bg3)'}
-            onMouseLeave={e=>e.currentTarget.style.background='transparent'}>
-            <span style={{fontSize:18,flexShrink:0}}>{item.icon||{goal:'🎯',milestone:'📍',task:'✅',quickTask:'⚡',meeting:'👥',expense:'💰',note:'📓'}[item._type]}</span>
+          <div key={item.id} onClick={()=>setSelected(isActive?null:item)}
+            style={{display:'flex',alignItems:'center',gap:10,padding:'8px 16px',cursor:'pointer',transition:'background .1s',background:isActive?'var(--bg3)':'transparent',borderRight:isActive?'3px solid var(--teal)':'3px solid transparent'}}>
+            <span style={{fontSize:16,flexShrink:0}}>{item.icon||{goal:'🎯',milestone:'📍',task:'✅',quickTask:'⚡',meeting:'👥',expense:'💰',note:'📓'}[item._type]}</span>
             <div style={{flex:1,minWidth:0}}>
-              <div style={{fontWeight:600,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>
-                {highlight(item.title||item.name,q)}
-              </div>
+              <div style={{fontWeight:600,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{highlight(item.title||item.name,q)}</div>
               {sub&&<div style={{fontSize:11,color:'var(--text2)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sub}</div>}
             </div>
             {item.status&&<div style={{width:6,height:6,borderRadius:'50%',background:statusColor,flexShrink:0}}/>}
             {isExp&&<span style={{fontSize:12,fontWeight:700,color:'var(--coral)',flexShrink:0}}>{item.amount}</span>}
+            <span style={{fontSize:11,color:'var(--text3)',flexShrink:0}}>›</span>
           </div>
         );
       })}
-      {items.length>5&&<div style={{fontSize:11,color:'var(--text2)',padding:'4px 16px 6px',fontStyle:'italic'}}>+{items.length-5} {T2('نتيجة أخرى','more results')}</div>}
+      {items.length>5&&<div style={{fontSize:11,color:'var(--text2)',padding:'3px 16px 6px',fontStyle:'italic'}}>+{items.length-5} {T2('نتيجة أخرى','more results')}</div>}
     </div>);
   };
 
   if(!open)return null;
   return ReactDOM.createPortal(
-    <div style={{position:'fixed',inset:0,zIndex:9998,background:'rgba(0,0,0,.7)',backdropFilter:'blur(8px)',display:'flex',flexDirection:'column',alignItems:'center',paddingTop:'10vh'}} onClick={onClose}>
-      <div style={{width:'min(600px,95vw)',background:'var(--bg2)',borderRadius:18,overflow:'hidden',boxShadow:'0 24px 80px rgba(0,0,0,.5)',border:'1px solid var(--border)',display:'flex',flexDirection:'column',maxHeight:'75vh'}} onClick={e=>e.stopPropagation()}>
-        {/* Search Input */}
-        <div style={{display:'flex',alignItems:'center',gap:10,padding:'14px 18px',borderBottom:'1px solid var(--border)'}}>
+    <div style={{position:'fixed',inset:0,zIndex:9998,background:'rgba(0,0,0,.7)',backdropFilter:'blur(8px)',display:'flex',flexDirection:'column',alignItems:'center',paddingTop:'8vh'}} onClick={onClose}>
+      <div style={{width:'min(620px,95vw)',background:'var(--bg2)',borderRadius:18,overflow:'hidden',boxShadow:'0 24px 80px rgba(0,0,0,.5)',border:'1px solid var(--border)',display:'flex',flexDirection:'column',maxHeight:'80vh'}} onClick={e=>e.stopPropagation()}>
+        {/* Input */}
+        <div style={{display:'flex',alignItems:'center',gap:10,padding:'14px 18px',borderBottom:'1px solid var(--border)',flexShrink:0}}>
           <span style={{fontSize:18,color:'var(--text2)',flexShrink:0}}>🔍</span>
-          <input ref={inputRef} value={q} onChange={e=>setQ(e.target.value)}
+          <input ref={inputRef} value={q} onChange={e=>{setQ(e.target.value);setSelected(null);}}
             placeholder={T2('ابحث في كل شيء...','Search everything...')}
             style={{flex:1,background:'none',border:'none',outline:'none',fontSize:16,fontWeight:500,color:'var(--text)',fontFamily:'inherit',direction:'inherit'}}/>
-          {q&&<span onClick={()=>setQ('')} style={{cursor:'pointer',fontSize:13,color:'var(--text2)',flexShrink:0,padding:4}}>✕</span>}
+          {q&&<span onClick={()=>{setQ('');setSelected(null);}} style={{cursor:'pointer',fontSize:13,color:'var(--text2)',flexShrink:0,padding:4}}>✕</span>}
           <kbd style={{fontSize:10,padding:'2px 6px',borderRadius:5,border:'1px solid var(--border)',color:'var(--text3)',flexShrink:0}}>ESC</kbd>
         </div>
-        {/* Results */}
+        {/* Results list */}
         <div style={{overflowY:'auto',flex:1}}>
           {!q&&<div style={{padding:32,textAlign:'center',color:'var(--text3)',fontSize:13}}>
             <div style={{fontSize:36,marginBottom:8}}>🔍</div>
-            {T2('ابدأ الكتابة للبحث في مهامك واجتماعاتك وكل بياناتك','Start typing to search tasks, meetings, and all your data')}
-            <div style={{marginTop:12,fontSize:11,opacity:.6}}>Ctrl+K {T2('للفتح السريع','to open quickly')}</div>
+            {T2('ابدأ الكتابة للبحث في كل بياناتك','Start typing to search all your data')}
+            <div style={{marginTop:12,fontSize:11,opacity:.6}}>Ctrl+K · ESC {T2('للإغلاق','to close')}</div>
           </div>}
           {q&&results&&results.total===0&&<div style={{padding:32,textAlign:'center',color:'var(--text3)',fontSize:13}}>
             <div style={{fontSize:36,marginBottom:8}}>🫥</div>
             {T2('لا توجد نتائج لـ','No results for')} "<strong>{q}</strong>"
           </div>}
           {results&&results.total>0&&<>
+            <Section icon="📓" label={T2('الملاحظات','Notes')} items={results.notes} type="note"/>
             <Section icon="✅" label={T2('المهام','Tasks')} items={results.tasks} type="task"/>
             <Section icon="👥" label={T2('الاجتماعات','Meetings')} items={results.meetings} type="meeting"/>
             <Section icon="🎯" label={T2('الأهداف والمراحل','Goals & Milestones')} items={results.goals} type="goal"/>
             <Section icon="💰" label={T2('المصاريف','Expenses')} items={results.expenses} type="expense"/>
-            <Section icon="📓" label={T2('الملاحظات','Notes')} items={results.notes} type="note"/>
-            <div style={{padding:'8px 16px 14px',textAlign:'center',fontSize:11,color:'var(--text3)',borderTop:'1px solid var(--border)',marginTop:4}}>
-              {results.total} {T2('نتيجة','results')}
+            <div style={{padding:'6px 16px 10px',textAlign:'center',fontSize:11,color:'var(--text3)',borderTop:'1px solid var(--border)',marginTop:4}}>
+              {results.total} {T2('نتيجة — اضغط على أي نتيجة لعرض تفاصيلها','results — tap any item to preview')}
             </div>
           </>}
         </div>
+        {/* Detail panel */}
+        {selected&&<DetailPanel item={selected}/>}
       </div>
     </div>,
     document.body
@@ -4098,6 +4186,21 @@ function App(){
     }catch(e){/* localStorage full — ignore */}
   },[]);
   const[restorePrompt,setRestorePrompt]=useState(null);
+  // Hide splash screen once app boots
+  useEffect(()=>{if(window._hideSplash)window._hideSplash();},[]);
+  // Handle Android back button — close modals in order
+  useEffect(()=>{
+    const h=()=>{
+      if(modal){setModal(null);return;}
+      if(confirm){setConfirm(null);return;}
+      if(searchOpen){setSearchOpen(false);return;}
+      if(dayView){setDayView(null);return;}
+      if(moreMenu){setMoreMenu(false);return;}
+    };
+    window.addEventListener('mutqin-back',h);
+    return()=>window.removeEventListener('mutqin-back',h);
+  },[modal,confirm,searchOpen,dayView,moreMenu]);
+
   useEffect(()=>{(async()=>{
     await initCats();await load();
     // Check if data is empty but backup exists
@@ -4399,7 +4502,7 @@ function App(){
       {expFromCal&&<ExpenseModal expense={{_isNew:true,date:expFromCal}} categories={data.categories||[]} budgets={data.budgets||[]} language={lang} onSave={async e=>{await handleSaveExpense(e);setExpFromCal(null);}} onClose={()=>setExpFromCal(null)}/>}
       {uploadModal&&<UploadModal language={lang} onImport={handleXlsxImport} onClose={()=>setUploadModal(false)}/>}
       {notifModal&&<NotifSettingsModal language={lang} toast={toast} onClose={()=>setNotifModal(false)}/>}
-      <GlobalSearch data={data} language={lang} open={searchOpen} onClose={()=>setSearchOpen(false)} onNavigate={setView} onEditItem={handleEditFromSearch}/>
+      <GlobalSearch data={data} language={lang} open={searchOpen} onClose={()=>setSearchOpen(false)} onEditItem={handleEditFromSearch}/>
       {vaultOpen&&<VaultModal lang={lang} toast={toast} onClose={()=>setVaultOpen(false)} handleExport={handleExport} handleImport={handleImport} getLocalSnapshots={getLocalSnapshots} handleDownloadSnapshot={handleDownloadSnapshot} handleRestoreSnapshot={handleRestoreSnapshot} data={data} ST={ST}/>}
       {restorePrompt&&<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400,textAlign:'center',padding:30}}>
         <div style={{fontSize:48,marginBottom:16}}>💾</div>
