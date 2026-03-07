@@ -1318,13 +1318,99 @@ function MeetingsPage({data,language,onAdd,onEdit,onDelete}){
   </div>);
 }
 
-function Today({data,language,onAdd,onEdit,onDelete,onStatus,onSaveList,onDeleteList}){const[ni,setNi]=useState({});const ts=localDS();const tT=(data.tasks||[]).filter(t=>t.dueDate&&t.dueDate.startsWith(ts));const tQ=(data.quickTasks||[]).filter(t=>t.dueDate&&t.dueDate.startsWith(ts));const tM=(data.meetings||[]).filter(m=>m.meetingDate&&m.meetingDate.startsWith(ts)).sort((a,b)=>new Date(a.meetingDate)-new Date(b.meetingDate));const sc={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text2)'};const sl={complete:T('مكتمل','Done',language),inProgress:T('جارٍ','Active',language),partial:T('جزئي','Partial',language),notStarted:T('لم يبدأ','Todo',language)};const pc={high:'var(--coral)',medium:'var(--gold)',low:'var(--lime)'};const n3={notStarted:'inProgress',inProgress:'complete',complete:'notStarted'};const n4={notStarted:'inProgress',inProgress:'partial',partial:'complete',complete:'notStarted'};const all=[...tT.map(t=>({...t,_s:'tasks',_ns:n4})),...tQ.map(t=>({...t,_s:'quickTasks',_ns:n3}))];const tLI=async(l,iid)=>{await onSaveList({...l,items:l.items.map(i=>i.id===iid?{...i,checked:!i.checked}:i)});};const aLI=async(l,title)=>{if(!title.trim())return;await onSaveList({...l,items:[...l.items,{id:uid(),title:title.trim(),checked:false,createdAt:new Date().toISOString()}]});setNi({...ni,[l.id]:''});};const rLI=async(l,iid)=>{await onSaveList({...l,items:l.items.filter(i=>i.id!==iid)});};const lP=l=>{if(!l.items||!l.items.length)return 0;return l.items.filter(i=>i.checked).length/l.items.length*100;};
-return(<div style={{display:'flex',flexDirection:'column',gap:16}}><h2 style={{fontSize:22,fontWeight:900}}>🔥 {T('اليوم','Today',language)}</h2>
+function Today({data,language,onAdd,onEdit,onDelete,onStatus,onSaveList,onDeleteList,searchQ='',setSearchQ,searchRef,categories=[]}){const[ni,setNi]=useState({});const ts=localDS();const tT=(data.tasks||[]).filter(t=>t.dueDate&&t.dueDate.startsWith(ts));const tQ=(data.quickTasks||[]).filter(t=>t.dueDate&&t.dueDate.startsWith(ts));const tM=(data.meetings||[]).filter(m=>m.meetingDate&&m.meetingDate.startsWith(ts)).sort((a,b)=>new Date(a.meetingDate)-new Date(b.meetingDate));const sc={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text2)'};const sl={complete:T('مكتمل','Done',language),inProgress:T('جارٍ','Active',language),partial:T('جزئي','Partial',language),notStarted:T('لم يبدأ','Todo',language)};const pc={high:'var(--coral)',medium:'var(--gold)',low:'var(--lime)'};const n3={notStarted:'inProgress',inProgress:'complete',complete:'notStarted'};const n4={notStarted:'inProgress',inProgress:'partial',partial:'complete',complete:'notStarted'};const all=[...tT.map(t=>({...t,_s:'tasks',_ns:n4})),...tQ.map(t=>({...t,_s:'quickTasks',_ns:n3}))];const tLI=async(l,iid)=>{await onSaveList({...l,items:l.items.map(i=>i.id===iid?{...i,checked:!i.checked}:i)});};const aLI=async(l,title)=>{if(!title.trim())return;await onSaveList({...l,items:[...l.items,{id:uid(),title:title.trim(),checked:false,createdAt:new Date().toISOString()}]});setNi({...ni,[l.id]:''});};const rLI=async(l,iid)=>{await onSaveList({...l,items:l.items.filter(i=>i.id!==iid)});};const lP=l=>{if(!l.items||!l.items.length)return 0;return l.items.filter(i=>i.checked).length/l.items.length*100;};
+
+  // ── Inline search logic ──
+  const sq=searchQ.trim().toLowerCase();
+  const searchActive=sq.length>0;
+  const matchF=(val)=>String(val||'').toLowerCase().includes(sq);
+  const scoreF=(item,fields)=>{let s=0;fields.forEach(f=>{const v=String(item[f]||'').toLowerCase();if(v===sq)s+=100;else if(v.startsWith(sq))s+=50;else if(v.includes(sq))s+=10;});return s;};
+  const getCatName=(cid)=>{const c=(categories||[]).find(x=>x.id===cid);return c?(c.icon?c.icon+' ':'')+c.name:'';};
+  const searchResults=!searchActive?null:{
+    notes:(data.notes||[]).filter(n=>matchF(n.title)||matchF(n.content)||matchF(n.body)).map(n=>({...n,_type:'note',_score:scoreF(n,['title','content','body'])})).sort((a,b)=>b._score-a._score),
+    tasks:[...(data.tasks||[]).filter(t=>matchF(t.title)||matchF(t.description)||matchF(t.notes)).map(t=>({...t,_type:'task',_score:scoreF(t,['title','description','notes'])})),
+           ...(data.quickTasks||[]).filter(t=>matchF(t.title)||matchF(t.notes)).map(t=>({...t,_type:'quickTask',_score:scoreF(t,['title'])}))].sort((a,b)=>b._score-a._score),
+    meetings:(data.meetings||[]).filter(m=>matchF(m.title)||matchF(m.description)||matchF(m.attendees)||matchF(m.notes)||matchF(m.minutes)).map(m=>({...m,_type:'meeting',_score:scoreF(m,['title','description','attendees'])})).sort((a,b)=>b._score-a._score),
+    goals:[...(data.goals||[]).filter(g=>matchF(g.title)||matchF(g.description)).map(g=>({...g,_type:'goal',_score:scoreF(g,['title','description'])})),
+           ...(data.milestones||[]).filter(m=>matchF(m.title)||matchF(m.description)).map(m=>({...m,_type:'milestone',_score:scoreF(m,['title','description'])}))].sort((a,b)=>b._score-a._score),
+    expenses:(data.expenses||[]).filter(e=>matchF(e.title)||matchF(e.notes)||matchF(e.category)||matchF(getCatName(e.category))).map(e=>({...e,_type:'expense',_score:scoreF(e,['title','notes'])})).sort((a,b)=>b._score-a._score),
+  };
+  const totalResults=searchResults?(searchResults.notes.length+searchResults.tasks.length+searchResults.meetings.length+searchResults.goals.length+searchResults.expenses.length):0;
+
+  const hligh=(text)=>{
+    if(!sq||!text)return text;
+    const s=String(text);const idx=s.toLowerCase().indexOf(sq);
+    if(idx===-1)return s;
+    return(<span>{s.slice(0,idx)}<mark style={{background:'var(--gold)',color:'var(--navy)',borderRadius:2,padding:'0 1px'}}>{s.slice(idx,idx+sq.length)}</mark>{s.slice(idx+sq.length)}</span>);
+  };
+
+  const SearchSection=({icon,label,items,typeKey})=>{
+    if(!items||!items.length)return null;
+    const typeEdit={task:'task',quickTask:'quickTask',meeting:'meeting',goal:'goal',milestone:'milestone',expense:'expense',note:'note'};
+    return(<div style={{marginBottom:12}}>
+      <div style={{fontSize:10,fontWeight:800,color:'var(--text2)',padding:'4px 0 6px',display:'flex',alignItems:'center',gap:6,letterSpacing:.5}}>
+        {icon} {label} <span style={{background:'var(--bg3)',borderRadius:10,padding:'1px 7px',fontSize:10,fontWeight:700}}>{items.length}</span>
+      </div>
+      <div style={{display:'flex',flexDirection:'column',gap:4}}>
+        {items.slice(0,8).map(item=>{
+          const sub=item._type==='task'||item._type==='quickTask'?(item.dueDate?'📅 '+item.dueDate:''):
+                    item._type==='meeting'?(item.meetingDate?'📅 '+item.meetingDate.slice(0,10):''):
+                    item._type==='goal'||item._type==='milestone'?(item.description||'').slice(0,40):
+                    item._type==='expense'?(getCatName(item.category)||''):(item.content||item.body||'').slice(0,60);
+          const statusColor={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text3)',scheduled:'var(--coral)'}[item.status]||'var(--text3)';
+          return(<div key={item.id} style={{display:'flex',alignItems:'center',gap:10,padding:'9px 12px',background:'var(--bg3)',borderRadius:10,cursor:'pointer'}}
+            onClick={()=>onEdit(typeEdit[item._type]||item._type, item)}>
+            <span style={{fontSize:16,flexShrink:0}}>{item.icon||{goal:'🎯',milestone:'📍',task:'✅',quickTask:'⚡',meeting:'👥',expense:'💰',note:'📓'}[item._type]}</span>
+            <div style={{flex:1,minWidth:0}}>
+              <div style={{fontWeight:600,fontSize:13,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{hligh(item.title||item.name||'')}</div>
+              {sub&&<div style={{fontSize:11,color:'var(--text2)',marginTop:1,overflow:'hidden',textOverflow:'ellipsis',whiteSpace:'nowrap'}}>{sub}</div>}
+            </div>
+            {item.status&&<div style={{width:6,height:6,borderRadius:'50%',background:statusColor,flexShrink:0}}/>}
+            {item._type==='expense'&&item.amount&&<span style={{fontSize:12,fontWeight:700,color:'var(--coral)',flexShrink:0}}>{item.amount} {item.currency||''}</span>}
+          </div>);
+        })}
+        {items.length>8&&<div style={{fontSize:11,color:'var(--text2)',padding:'3px 0',fontStyle:'italic',textAlign:'center'}}>+{items.length-8} {T('نتيجة أخرى','more results',language)}</div>}
+      </div>
+    </div>);
+  };
+
+return(<div style={{display:'flex',flexDirection:'column',gap:16}}>
+  {/* ── Search Bar ── */}
+  <div style={{position:'relative'}}>
+    <span style={{position:'absolute',top:'50%',transform:'translateY(-50%)',fontSize:16,color:'var(--text2)',pointerEvents:'none',[language==='ar'?'right':'left']:14}}>🔍</span>
+    <input ref={searchRef} value={searchQ} onChange={e=>setSearchQ(e.target.value)}
+      placeholder={T('ابحث في كل شيء — مهام، اجتماعات، مصاريف، ملاحظات...','Search tasks, meetings, expenses, notes...',language)}
+      style={{width:'100%',padding:'12px 44px',borderRadius:14,border:'2px solid '+(searchActive?'var(--teal)':'var(--border)'),background:'var(--bg2)',color:'var(--text)',fontSize:14,fontFamily:'inherit',outline:'none',boxSizing:'border-box',direction:'inherit',transition:'border-color .2s'}}/>
+    {searchActive&&<button onClick={()=>setSearchQ('')}
+      style={{position:'absolute',top:'50%',transform:'translateY(-50%)',background:'var(--bg3)',border:'1px solid var(--border)',borderRadius:8,cursor:'pointer',color:'var(--text2)',fontSize:11,fontWeight:700,padding:'3px 10px',[language==='ar'?'left':'right']:10}}>
+      {T('إلغاء','Clear',language)} ✕
+    </button>}
+  </div>
+
+  {/* ── Search Results ── */}
+  {searchActive&&<div style={{display:'flex',flexDirection:'column',gap:0}}>
+    {totalResults===0
+      ?<div style={{textAlign:'center',padding:'32px 0',color:'var(--text2)',fontSize:13}}>
+          <div style={{fontSize:36,marginBottom:8}}>🫥</div>
+          {T('لا توجد نتائج لـ','No results for',language)} "<strong>{searchQ}</strong>"
+        </div>
+      :<>
+        <div style={{fontSize:11,color:'var(--text2)',marginBottom:10,fontWeight:600}}>{totalResults} {T('نتيجة','results',language)}</div>
+        <SearchSection icon="📓" label={T('الملاحظات','Notes',language)} items={searchResults.notes} typeKey="note"/>
+        <SearchSection icon="✅" label={T('المهام','Tasks',language)} items={searchResults.tasks} typeKey="task"/>
+        <SearchSection icon="👥" label={T('الاجتماعات','Meetings',language)} items={searchResults.meetings} typeKey="meeting"/>
+        <SearchSection icon="🎯" label={T('الأهداف والمراحل','Goals & Milestones',language)} items={searchResults.goals} typeKey="goal"/>
+        <SearchSection icon="💰" label={T('المصاريف','Expenses',language)} items={searchResults.expenses} typeKey="expense"/>
+      </>}
+  </div>}
+
+  {/* ── Normal Today Content (hidden while searching) ── */}
+  {!searchActive&&<><h2 style={{fontSize:22,fontWeight:900}}>🔥 {T('اليوم','Today',language)}</h2>
 <div className="card" style={{padding:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--pink)'}}>👥 {T('الاجتماعات','Meetings',language)}</h3><button className="btn btn-pink btn-xs" onClick={()=>onAdd('meeting',null,null,{meetingDate:ts+'T09:00'})}>⚡ {T('جديد','New',language)}</button></div>{!tM.length?(<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>😌 {T('لا اجتماعات','No meetings',language)}</p>):tM.map(m=>(<div key={m.id} style={{display:'flex',alignItems:'flex-start',gap:12,padding:'12px 0',borderBottom:'1px solid var(--border)'}}><div style={{fontSize:28,width:44,height:44,display:'flex',alignItems:'center',justifyContent:'center',background:'var(--pink-g)',borderRadius:12,flexShrink:0}}>{m.icon||'👥'}</div><div style={{flex:1,minWidth:0}}><div style={{fontWeight:700,fontSize:14,display:'flex',alignItems:'center',gap:6,textDecoration:m.meetingStatus==='cancelled'?'line-through':'none',opacity:m.meetingStatus==='cancelled'?.5:1}}>{m.title}{m.meetingStatus==='done'&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:5,background:'var(--lime-g)',color:'var(--lime)',fontWeight:700}}>✅</span>}{m.meetingStatus==='cancelled'&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:5,background:'var(--coral-g)',color:'var(--coral)',fontWeight:700}}>❌</span>}{m.meetingStatus==='deferred'&&<span style={{fontSize:9,padding:'1px 5px',borderRadius:5,background:'var(--gold-g)',color:'var(--gold)',fontWeight:700}}>⏳</span>}</div><div style={{fontSize:12,color:'var(--text2)',display:'flex',gap:8,flexWrap:'wrap',marginTop:3}}>{m.meetingDate&&<span>🕐 {new Date(m.meetingDate).toLocaleTimeString(language==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'})}</span>}{m.location&&<span>📍 {m.location}</span>}{m.attendees&&<span>👤 {m.attendees}</span>}</div>{m.minutes&&<div className="note-box" style={{background:'var(--pink-g)',borderColor:'var(--pink)'}}>📋 <strong>{T('المحضر','Minutes',language)}:</strong> {m.minutes.length>120?m.minutes.slice(0,120)+'...':m.minutes}</div>}{m.decisions&&<div className="note-box" style={{background:'var(--lime-g)',borderColor:'var(--lime)'}}>✅ <strong>{T('القرارات','Decisions',language)}:</strong> {m.decisions.length>80?m.decisions.slice(0,80)+'...':m.decisions}</div>}{m.notes&&!m.minutes&&<div className="note-box">📝 {m.notes.length>60?m.notes.slice(0,60)+'...':m.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('meeting',m)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete('meetings',m.id,m.title)}>🗑️</button></div></div>))}</div>
 
 <div className="card" style={{padding:16}}><div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:14}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--teal)'}}>✅ {T('المهام','Tasks',language)} <span style={{fontSize:12,fontWeight:600,color:'var(--text2)'}}>({all.filter(t=>t.status==='complete').length}/{all.length})</span></h3><button className="btn btn-teal btn-xs" onClick={()=>onAdd('task',null,null,{dueDate:ts})}>⚡ {T('مهمة','Task',language)}</button></div>{!all.length?(<p style={{textAlign:'center',color:'var(--text2)',padding:16,fontSize:13}}>🎉 {T('لا مهام','No tasks',language)}</p>):all.map(tk=>(<div key={tk.id} style={{display:'flex',alignItems:'center',gap:8,padding:'10px 0',borderBottom:'1px solid var(--border)'}}><div onClick={()=>onStatus(tk._s,tk,tk._ns[tk.status])} style={{width:26,height:26,borderRadius:8,border:`2px solid ${sc[tk.status]}`,background:tk.status==='complete'?sc.complete:'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:13,color:'white',fontWeight:900,flexShrink:0}}>{tk.status==='complete'&&'✓'}</div><span style={{fontSize:18}}>{tk.icon||'✅'}</span><div style={{flex:1,minWidth:0}}><div style={{fontWeight:600,fontSize:13,textDecoration:tk.status==='complete'?'line-through':'none',opacity:tk.status==='complete'?.5:1}}>{tk.title}</div><div style={{display:'flex',gap:4,flexWrap:'wrap',marginTop:3}}><span className="badge" style={{background:`${sc[tk.status]}22`,color:sc[tk.status]}}>{sl[tk.status]}</span>{tk.priority&&<span className="badge" style={{background:`${pc[tk.priority]||'var(--text2)'}22`,color:pc[tk.priority]||'var(--text2)'}}>{tk.priority==='high'?'🔥':tk.priority==='medium'?'⚡':'🌱'}</span>}{tk.repeat&&tk.repeat!=='never'&&<span className="badge" style={{background:'var(--electric-g)',color:'var(--electric)'}}>🔄</span>}{tk.completedAt&&tk.startedAt&&<span className="badge" style={{background:'var(--lime)22',color:'var(--lime)'}}>⏱️ {fmtDuration(tk.startedAt,tk.completedAt,language)}</span>}{tk.startedAt&&!tk.completedAt&&<span className="badge" style={{background:'var(--teal-g)',color:'var(--teal)'}}>▶ {fmtDuration(tk.startedAt,new Date().toISOString(),language)}</span>}{(tk.tags||[]).map(tid=>{const tag=DEF_TAGS.find(t=>t.id===tid);return tag?<span key={tid} className="badge" style={{background:tag.color+'22',color:tag.color}}>{tag.icon}</span>:null;})}</div>{tk.notes&&<div className="note-box">📝 {tk.notes.length>60?tk.notes.slice(0,60)+'...':tk.notes}</div>}</div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit(tk._s==='tasks'?'task':'quickTask',tk)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDelete(tk._s,tk.id,tk.title)}>🗑️</button></div></div>))}</div>
 <div style={{display:'flex',justifyContent:'space-between',alignItems:'center'}}><h3 style={{fontSize:16,fontWeight:800,color:'var(--gold)'}}>📋 {T('القوائم','Lists',language)}</h3><button className="btn btn-gold btn-xs" onClick={()=>onAdd('taskList')}>⚡ {T('قائمة','List',language)}</button></div>
-{!(data.taskLists||[]).length?(<div className="card" style={{padding:30,textAlign:'center'}}><div style={{fontSize:40,marginBottom:8}}>📝</div><p style={{color:'var(--text2)',fontSize:13}}>{T('أنشئ قائمتك الأولى!','Create your first list!',language)}</p></div>):(data.taskLists||[]).map(list=>(<div key={list.id} className="card" style={{padding:14,borderRight:language==='ar'?`3px solid ${list.color}`:'none',borderLeft:language!=='ar'?`3px solid ${list.color}`:'none'}}><div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}><div style={{fontSize:24,width:40,height:40,display:'flex',alignItems:'center',justifyContent:'center',background:`${list.color}22`,borderRadius:10,flexShrink:0}}>{list.icon}</div><div style={{flex:1}}><div style={{fontWeight:800,fontSize:14}}>{list.name}</div><div style={{fontSize:11,color:'var(--text2)',fontWeight:600}}>{list.items?.length||0} {T('عناصر','items',language)} · {Math.round(lP(list))}%</div></div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('taskList',list)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDeleteList(list)}>🗑️</button></div></div><div style={{height:4,background:'var(--border)',borderRadius:4,marginBottom:10,overflow:'hidden'}}><div style={{height:'100%',width:`${lP(list)}%`,background:`linear-gradient(90deg,${list.color},${list.color}88)`,borderRadius:4,transition:'width .5s'}}/></div>{(list.items||[]).map(it=>(<div key={it.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}><div onClick={()=>tLI(list,it.id)} style={{width:22,height:22,borderRadius:6,border:`2px solid ${it.checked?'var(--lime)':'var(--border)'}`,background:it.checked?'var(--lime)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{it.checked&&'✓'}</div><span style={{flex:1,fontSize:13,fontWeight:500,textDecoration:it.checked?'line-through':'none',opacity:it.checked?.4:1}}>{it.title}</span><button className="btn btn-ghost btn-icon-xs" style={{width:22,height:22,fontSize:10}} onClick={()=>rLI(list,it.id)}>✕</button></div>))}<div style={{display:'flex',gap:8,marginTop:8}}><input className="field" style={{fontSize:13,padding:'8px 12px'}} value={ni[list.id]||''} onChange={e=>setNi({...ni,[list.id]:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')aLI(list,ni[list.id]||'');}} placeholder={T('عنصر جديد...','New item...',language)}/><button className="btn btn-teal btn-sm" onClick={()=>aLI(list,ni[list.id]||'')}>+</button></div></div>))}</div>);}
+{!(data.taskLists||[]).length?(<div className="card" style={{padding:30,textAlign:'center'}}><div style={{fontSize:40,marginBottom:8}}>📝</div><p style={{color:'var(--text2)',fontSize:13}}>{T('أنشئ قائمتك الأولى!','Create your first list!',language)}</p></div>):(data.taskLists||[]).map(list=>(<div key={list.id} className="card" style={{padding:14,borderRight:language==='ar'?`3px solid ${list.color}`:'none',borderLeft:language!=='ar'?`3px solid ${list.color}`:'none'}}><div style={{display:'flex',alignItems:'center',gap:10,marginBottom:10}}><div style={{fontSize:24,width:40,height:40,display:'flex',alignItems:'center',justifyContent:'center',background:`${list.color}22`,borderRadius:10,flexShrink:0}}>{list.icon}</div><div style={{flex:1}}><div style={{fontWeight:800,fontSize:14}}>{list.name}</div><div style={{fontSize:11,color:'var(--text2)',fontWeight:600}}>{list.items?.length||0} {T('عناصر','items',language)} · {Math.round(lP(list))}%</div></div><div style={{display:'flex',gap:4}}><button className="btn btn-ghost btn-icon-xs" onClick={()=>onEdit('taskList',list)}>✏️</button><button className="btn btn-ghost btn-icon-xs" style={{color:'var(--coral)'}} onClick={()=>onDeleteList(list)}>🗑️</button></div></div><div style={{height:4,background:'var(--border)',borderRadius:4,marginBottom:10,overflow:'hidden'}}><div style={{height:'100%',width:`${lP(list)}%`,background:`linear-gradient(90deg,${list.color},${list.color}88)`,borderRadius:4,transition:'width .5s'}}/></div>{(list.items||[]).map(it=>(<div key={it.id} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 0'}}><div onClick={()=>tLI(list,it.id)} style={{width:22,height:22,borderRadius:6,border:`2px solid ${it.checked?'var(--lime)':'var(--border)'}`,background:it.checked?'var(--lime)':'transparent',cursor:'pointer',display:'flex',alignItems:'center',justifyContent:'center',fontSize:11,color:'white',fontWeight:900,flexShrink:0,transition:'all .2s'}}>{it.checked&&'✓'}</div><span style={{flex:1,fontSize:13,fontWeight:500,textDecoration:it.checked?'line-through':'none',opacity:it.checked?.4:1}}>{it.title}</span><button className="btn btn-ghost btn-icon-xs" style={{width:22,height:22,fontSize:10}} onClick={()=>rLI(list,it.id)}>✕</button></div>))}<div style={{display:'flex',gap:8,marginTop:8}}><input className="field" style={{fontSize:13,padding:'8px 12px'}} value={ni[list.id]||''} onChange={e=>setNi({...ni,[list.id]:e.target.value})} onKeyDown={e=>{if(e.key==='Enter')aLI(list,ni[list.id]||'');}} placeholder={T('عنصر جديد...','New item...',language)}/><button className="btn btn-teal btn-sm" onClick={()=>aLI(list,ni[list.id]||'')}>+</button></div></div>))}</>}</div>);}
 
 // ========== EXPENSE SYSTEM ==========
 const DEF_TAGS=[
@@ -2229,7 +2315,7 @@ function RecurringModal({language,categories,onClose,onImport}){
   </div></div>);
 }
 
-function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,onDeleteCategory,onSaveBudget,onDeleteBudget,toast}){
+function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,onDeleteCategory,onSaveBudget,onDeleteBudget,toast,editPending,onEditPendingDone}){
   const[expModal,setExpModal]=useState(null);
   const[catModal,setCatModal]=useState(null);
   const[budModal,setBudModal]=useState(null);
@@ -2254,6 +2340,7 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
 
   // Auto-fetch rates on first load if never fetched
   useEffect(()=>{if(!rateData.updated){fetchLiveRates().then(d=>setRateData(d));}},[]);
+  useEffect(()=>{if(editPending){setExpModal({...editPending,txType:editPending.txType||'expense'});if(onEditPendingDone)onEditPendingDone();}},[editPending]);
 
   const refreshRates=useCallback(async()=>{setRateLoading(true);const d=await fetchLiveRates();setRateData(d);setRateLoading(false);toast(T('تم تحديث الأسعار 💱','Rates updated 💱',language));},[toast,language]);
   const setBaseCurrency=useCallback((code)=>{const d={...rateData,baseCurrency:code};saveRates(d);setRateData(d);},[rateData]);
@@ -2876,8 +2963,9 @@ function NoteModal({note,language,onSave,onDelete,onClose,isDark}){
   </div></div>);
 }
 
-function Notes({data,language,onSaveNote,onDeleteNote,toast,isDark}){
+function Notes({data,language,onSaveNote,onDeleteNote,toast,isDark,editPending,onEditPendingDone}){
   const[noteModal,setNoteModal]=useState(null);
+  useEffect(()=>{if(editPending){setNoteModal(editPending);if(onEditPendingDone)onEditPendingDone();}},[editPending]);
   const[viewMode,setViewMode]=useState('grid');
   const[noteSearch,setNoteSearch]=useState('');
   const[typeFilter,setTypeFilter]=useState('all');
@@ -3967,7 +4055,7 @@ function highlight(text, query) {
   return (<span>{String(text).slice(0, idx)}<mark style={{background:'var(--gold)',color:'var(--navy)',borderRadius:3,padding:'0 1px'}}>{String(text).slice(idx, idx+query.length)}</mark>{String(text).slice(idx+query.length)}</span>);
 }
 
-function GlobalSearch({data,language,open,onClose,onEditItem}) {
+function GlobalSearch({data,language,open,onClose,onEditItem,categories=[]}) {
   const[q,setQ]=useState('');
   const[selected,setSelected]=useState(null); // item shown in detail panel
   const inputRef=useRef(null);
@@ -4021,7 +4109,7 @@ function GlobalSearch({data,language,open,onClose,onEditItem}) {
           <span style={{fontSize:12,color:'var(--text2)',fontWeight:600}}>{typeLabel}</span>
           {statusLabel&&<span style={{fontSize:11,fontWeight:700,color:statusColor,background:'rgba(0,0,0,.2)',borderRadius:20,padding:'2px 10px'}}>{statusLabel}</span>}
           <div style={{flex:1}}/>
-          <button onClick={()=>{onEditItem(item._type,item);onClose();}} style={{background:'var(--teal)',color:'#fff',border:'none',borderRadius:8,padding:'5px 14px',cursor:'pointer',fontSize:12,fontWeight:700}}>
+          <button onClick={()=>{onEditItem(item._type,item);}} style={{background:'var(--teal)',color:'#fff',border:'none',borderRadius:8,padding:'5px 14px',cursor:'pointer',fontSize:12,fontWeight:700}}>
             {T2('تعديل ✏️','Edit ✏️')}
           </button>
         </div>
@@ -4051,7 +4139,8 @@ function GlobalSearch({data,language,open,onClose,onEditItem}) {
       </div>
       {items.slice(0,5).map(item=>{
         const isExp=item._type==='expense';
-        const sub=item._type==='task'||item._type==='quickTask'?(item.dueDate?'📅 '+item.dueDate:''):item._type==='meeting'?(item.meetingDate?'📅 '+item.meetingDate.slice(0,10):''):item._type==='goal'||item._type==='milestone'?(item.description||'').slice(0,40):isExp?((item.amount||0)+' '+(item.currency||'')):(item.content||item.body||'').slice(0,50);
+        const catName=(cid)=>{const c=(categories||[]).find(x=>x.id===cid);return c?(c.icon?c.icon+' ':'')+c.name:'';};
+        const sub=item._type==='task'||item._type==='quickTask'?(item.dueDate?'📅 '+item.dueDate:''):item._type==='meeting'?(item.meetingDate?'📅 '+item.meetingDate.slice(0,10):''):item._type==='goal'||item._type==='milestone'?(item.description||'').slice(0,40):isExp?(catName(item.category)||((item.amount||0)+' '+(item.currency||''))):(item.content||item.body||'').slice(0,50);
         const statusColor={complete:'var(--lime)',inProgress:'var(--teal)',partial:'var(--gold)',notStarted:'var(--text3)'}[item.status]||'var(--text3)';
         const isActive=selected&&selected.id===item.id;
         return(
@@ -4124,6 +4213,10 @@ function App(){
   const[dayView,setDayView]=useState(null);const[listModal,setListModal]=useState(null);const[uploadModal,setUploadModal]=useState(false);
   const[notifModal,setNotifModal]=useState(false);
   const[searchOpen,setSearchOpen]=useState(false);
+  const[expEditPending,setExpEditPending]=useState(null);
+  const[noteEditPending,setNoteEditPending]=useState(null);
+  const[todaySearch,setTodaySearch]=useState('');
+  const todaySearchRef=useRef(null);
   const[moreMenu,setMoreMenu]=useState(false);
   const[theme,setTheme]=useState(()=>localStorage.getItem('gt-theme')||'dark');
   const[previewMode,setPreviewMode]=useState('desktop');
@@ -4227,7 +4320,6 @@ function App(){
   },[load,toast,lang]);
   useEffect(()=>{document.documentElement.lang=lang;document.documentElement.dir=lang==='ar'?'rtl':'ltr';},[lang]);
   useEffect(()=>{document.documentElement.setAttribute('data-theme',theme);localStorage.setItem('gt-theme',theme);},[theme]);
-  useEffect(()=>{const h=(e)=>{if((e.ctrlKey||e.metaKey)&&e.key==='k'){e.preventDefault();setSearchOpen(s=>!s);}};document.addEventListener('keydown',h);return()=>document.removeEventListener('keydown',h);},[]);
   useNotifications(data,lang);
 
   // Auto-defer overdue tasks (runs once after initial load)
@@ -4263,15 +4355,18 @@ function App(){
 
   const handleSave=useCallback(async(type,item)=>{if(type==='milestone'&&modal?.goalId)item.goalId=modal.goalId;try{await dPut(tsMap[type],item);await load();toast(T('تم الحفظ ✅','Saved ✅',lang));setModal(null);}catch(e){toast(T('خطأ','Error',lang),'error');}},[modal,lang,load,toast]);
   const handleAdd=useCallback((type,gid,msid,defaults)=>{if(type==='taskList'){setListModal({});return;}setModal({type,goalId:gid,milestoneId:msid,editItem:defaults||null});},[]);
-  const handleEdit=useCallback((type,item)=>{if(type==='taskList'){setListModal(item);return;}setModal({type,editItem:item});},[]);
+  const[returnView,setReturnView]=useState(null);
+  const handleEdit=useCallback((type,item)=>{if(type==='taskList'){setListModal(item);return;}if(type==='expense'){setReturnView(view);setView('expenses');setTimeout(()=>setExpEditPending(item),120);return;}if(type==='note'){setReturnView(view);setView('notes');setTimeout(()=>setNoteEditPending(item),120);return;}setModal({type,editItem:item});},[view]);
   const handleEditFromSearch=useCallback((type,item)=>{
-    const viewMap={task:'dashboard',quickTask:'today',milestone:'dashboard',goal:'dashboard',meeting:'meetings',expense:'expenses',note:'notes'};
+    if(type==='expense'){setView('expenses');setTimeout(()=>setExpEditPending(item),120);return;}
+    if(type==='note'){setView('notes');setTimeout(()=>setNoteEditPending(item),120);return;}
+    const viewMap={task:'dashboard',quickTask:'today',milestone:'dashboard',goal:'dashboard',meeting:'meetings'};
     const targetView=viewMap[type]||'dashboard';
     setView(targetView);
     setTimeout(()=>{
       if(type==='taskList'){setListModal(item);return;}
       setModal({type:type==='quickTask'?'quickTask':type,editItem:item,goalId:item.goalId||null,milestoneId:item.milestoneId||null});
-    },100);
+    },120);
   },[]);
   const handleDelete=useCallback((store,id,title)=>{setConfirm({message:T(`حذف "${title}"؟`,`Delete "${title}"?`,lang),onOk:async()=>{await dDel(store,id);if(store==='goals'){for(const m of(data.milestones||[]).filter(m=>m.goalId===id)){for(const tk of(data.tasks||[]).filter(tk=>tk.milestoneId===m.id))await dDel('tasks',tk.id);await dDel('milestones',m.id);}}if(store==='milestones'){for(const tk of(data.tasks||[]).filter(tk=>tk.milestoneId===id))await dDel('tasks',tk.id);}await load();toast(T('تم الحذف 🗑️','Deleted 🗑️',lang));setConfirm(null);}});},[lang,data,load,toast]);
   const handleStatus=useCallback(async(store,item,ns)=>{
@@ -4416,7 +4511,7 @@ function App(){
           <nav className="dnav" style={{gap:4}}>{navs.map(n=>(<div key={n.id} className={`dnav-item ${view===n.id?'active':''}`} onClick={()=>setView(n.id)}><span>{n.icon}</span><span>{n.label}</span></div>))}</nav>
           <div style={{display:'flex',alignItems:'center',gap:2,flexShrink:0}}>
             {installPrompt&&<button className="btn btn-coral btn-sm hidden sm:flex" onClick={handleInstall} style={{fontSize:12,padding:'6px 12px',animation:'pulse 2s infinite'}}>📲 {T('ثبّت التطبيق','Install App',lang)}</button>}
-            <button className="btn btn-ghost btn-icon-sm" title={T('بحث شامل','Global Search',lang)+' (Ctrl+K)'} onClick={()=>setSearchOpen(true)} style={{position:'relative'}}>🔍</button>
+            <button className="btn btn-ghost btn-icon-sm" title={T('بحث شامل','Global Search',lang)} onClick={()=>{setView('today');setTimeout(()=>todaySearchRef.current?.focus(),150);}} style={{position:'relative'}}>🔍</button>
             <button className="btn btn-ghost btn-icon-sm" title={T('الإشعارات','Notifications',lang)} onClick={()=>setNotifModal(true)} style={{position:'relative'}}>🔔{getNotifSettings().enabled&&<div style={{position:'absolute',top:4,right:4,width:7,height:7,borderRadius:'50%',background:'var(--teal)',border:'2px solid var(--bg2)'}}/>}</button>
             <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={theme==='dark'?T('الوضع الفاتح','Light Mode',lang):T('الوضع الداكن','Dark Mode',lang)} onClick={()=>setTheme(t=>t==='dark'?'light':'dark')}>{theme==='dark'?'☀️':'🌙'}</button>
             <button className="btn btn-ghost btn-icon-sm hidden sm:flex" title={previewMode==='desktop'?T('معاينة الجوال','Mobile Preview',lang):T('معاينة سطح المكتب','Desktop View',lang)} onClick={()=>setPreviewMode(p=>p==='desktop'?'mobile':'desktop')} style={{fontSize:16}}>{previewMode==='desktop'?'📱':'💻'}</button>
@@ -4451,11 +4546,11 @@ function App(){
                 <BackupBar language={lang} onExport={handleExport} onVault={()=>setVaultOpen(true)}/>
                 {view!=='timeline'&&view!=='expenses'&&view!=='notes'&&view!=='meetings'&&<div style={{marginBottom:16}}><Cal language={lang} data={data} onDayClick={handleDayClick}/></div>}
                 {view==='dashboard'&&<><AnalyticsDashboard data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter} tagFilter={tagFilter} onTagFilter={setTagFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter} tagFilter={tagFilter}/></>}
-                {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList}/>}
+                {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList} searchQ={todaySearch} setSearchQ={setTodaySearch} searchRef={todaySearchRef} categories={data.categories||[]}/>}
                 {view==='meetings'&&<MeetingsPage data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete}/>}
-                {view==='expenses'&&<Expenses data={data} language={lang} onSaveExpense={handleSaveExpense} onDeleteExpense={handleDeleteExpense} onSaveCategory={handleSaveCategory} onDeleteCategory={handleDeleteCategory} onSaveBudget={handleSaveBudget} onDeleteBudget={handleDeleteBudget} toast={toast}/>}
+                {view==='expenses'&&<Expenses data={data} language={lang} onSaveExpense={handleSaveExpense} onDeleteExpense={handleDeleteExpense} onSaveCategory={handleSaveCategory} onDeleteCategory={handleDeleteCategory} onSaveBudget={handleSaveBudget} onDeleteBudget={handleDeleteBudget} toast={toast} editPending={expEditPending} onEditPendingDone={()=>{setExpEditPending(null);if(returnView){setView(returnView);setReturnView(null);}}}/>}
                 {view==='health'&&<Health data={data} language={lang} onSaveHealth={handleSaveHealth} onDeleteHealth={handleDeleteHealth} toast={toast}/>}
-                {view==='notes'&&<Notes data={data} language={lang} isDark={theme==='dark'} onSaveNote={handleSaveNote} onDeleteNote={handleDeleteNote} toast={toast}/>}
+                {view==='notes'&&<Notes data={data} language={lang} isDark={theme==='dark'} onSaveNote={handleSaveNote} onDeleteNote={handleDeleteNote} toast={toast} editPending={noteEditPending} onEditPendingDone={()=>{setNoteEditPending(null);if(returnView){setView(returnView);setReturnView(null);}}}/>}
                 {view==='timeline'&&<Timeline data={data} language={lang}/>}
               </div>
             </div>
@@ -4474,7 +4569,7 @@ function App(){
                 </div>
                 <div>
                   {view==='dashboard'&&<><AnalyticsDashboard data={data} language={lang}/><SearchFilter language={lang} search={search} onSearch={setSearch} filter={filter} onFilter={setFilter} tagFilter={tagFilter} onTagFilter={setTagFilter}/><Dashboard data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onReorder={handleReorder} search={search} filter={filter} tagFilter={tagFilter}/></>}
-                  {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList}/>}
+                  {view==='today'&&<Today data={data} language={lang} onAdd={handleAdd} onEdit={handleEdit} onDelete={handleDelete} onStatus={handleStatus} onSaveList={handleSaveList} onDeleteList={handleDeleteList} searchQ={todaySearch} setSearchQ={setTodaySearch} searchRef={todaySearchRef} categories={data.categories||[]}/>}
                 </div>
               </div>
             ):view==='meetings'?(
@@ -4502,7 +4597,6 @@ function App(){
       {expFromCal&&<ExpenseModal expense={{_isNew:true,date:expFromCal}} categories={data.categories||[]} budgets={data.budgets||[]} language={lang} onSave={async e=>{await handleSaveExpense(e);setExpFromCal(null);}} onClose={()=>setExpFromCal(null)}/>}
       {uploadModal&&<UploadModal language={lang} onImport={handleXlsxImport} onClose={()=>setUploadModal(false)}/>}
       {notifModal&&<NotifSettingsModal language={lang} toast={toast} onClose={()=>setNotifModal(false)}/>}
-      <GlobalSearch data={data} language={lang} open={searchOpen} onClose={()=>setSearchOpen(false)} onEditItem={handleEditFromSearch}/>
       {vaultOpen&&<VaultModal lang={lang} toast={toast} onClose={()=>setVaultOpen(false)} handleExport={handleExport} handleImport={handleImport} getLocalSnapshots={getLocalSnapshots} handleDownloadSnapshot={handleDownloadSnapshot} handleRestoreSnapshot={handleRestoreSnapshot} data={data} ST={ST}/>}
       {restorePrompt&&<div className="overlay"><div className="modal" onClick={e=>e.stopPropagation()} style={{maxWidth:400,textAlign:'center',padding:30}}>
         <div style={{fontSize:48,marginBottom:16}}>💾</div>
