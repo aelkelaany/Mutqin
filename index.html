@@ -1434,23 +1434,52 @@ const DEF_CATS=[
 const CURRENCIES=[{code:'SAR',icon:'🇸🇦',name:'ريال',nameEn:'SAR'},{code:'EGP',icon:'🇪🇬',name:'جنيه',nameEn:'EGP'},{code:'USD',icon:'🇺🇸',name:'دولار',nameEn:'USD'},{code:'EUR',icon:'🇪🇺',name:'يورو',nameEn:'EUR'},{code:'GBP',icon:'🇬🇧',name:'جنيه إسترليني',nameEn:'GBP'}];
 
 // Exchange rates system
-const DEF_RATES={USD:1,SAR:3.75,EGP:50.0,EUR:0.92,GBP:0.79};
+const DEF_RATES={USD:1,SAR:3.75,EGP:51.5,EUR:0.92,GBP:0.79};
 function getStoredRates(){try{const s=localStorage.getItem('gt-rates');return s?JSON.parse(s):{rates:DEF_RATES,base:'USD',updated:null,baseCurrency:'SAR'};}catch(e){return{rates:DEF_RATES,base:'USD',updated:null,baseCurrency:'SAR'};}}
 function saveRates(data){localStorage.setItem('gt-rates',JSON.stringify(data));}
 async function fetchLiveRates(){
+  // Always re-read from localStorage so manual overrides reflect latest state
+  const applyRates=(rawRates)=>{
+    const fresh=getStoredRates();
+    const rates={USD:1,SAR:rawRates.SAR||3.75,EGP:rawRates.EGP||51.5,EUR:rawRates.EUR||0.92,GBP:rawRates.GBP||0.79};
+    const merged={...rates};
+    if(fresh.manualOverrides&&Object.keys(fresh.manualOverrides).length>0){Object.entries(fresh.manualOverrides).forEach(([k,v])=>{merged[k]=v;});}
+    const newData={...fresh,rates:merged,base:'USD',updated:new Date().toISOString()};
+    saveRates(newData);
+    return newData;
+  };
+  const bust='?t='+Date.now();
+  // Source 1: Cloudflare Pages (less cached, daily from ECB)
   try{
-    const res=await fetch('https://open.er-api.com/v6/latest/USD');
+    const res=await fetch('https://latest.currency-api.pages.dev/v1/currencies/usd.json'+bust,{cache:'no-store'});
+    if(!res.ok)throw new Error('CF error');
+    const data=await res.json();
+    const r=data.usd;
+    if(!r||!r.egp)throw new Error('Bad data');
+    console.log('Rates from CF Pages - EGP:',r.egp);
+    return applyRates({SAR:r.sar,EGP:r.egp,EUR:r.eur,GBP:r.gbp});
+  }catch(e1){console.warn('CF Pages failed:',e1);}
+  // Source 2: fawazahmed0 on jsDelivr
+  try{
+    const today=new Date().toISOString().slice(0,10);
+    const res=await fetch(`https://cdn.jsdelivr.net/npm/@fawazahmed0/currency-api@${today}/v1/currencies/usd.json`,{cache:'no-store'});
+    if(!res.ok)throw new Error('CDN error');
+    const data=await res.json();
+    const r=data.usd;
+    if(!r||!r.egp)throw new Error('Bad data');
+    console.log('Rates from jsDelivr - EGP:',r.egp);
+    return applyRates({SAR:r.sar,EGP:r.egp,EUR:r.eur,GBP:r.gbp});
+  }catch(e2){console.warn('jsDelivr failed:',e2);}
+  // Source 3: open.er-api fallback
+  try{
+    const res=await fetch('https://open.er-api.com/v6/latest/USD',{cache:'no-store'});
     if(!res.ok)throw new Error('API error');
     const data=await res.json();
     if(data.result!=='success')throw new Error('API fail');
-    const rates={USD:1,SAR:data.rates.SAR||3.75,EGP:data.rates.EGP||50,EUR:data.rates.EUR||0.92,GBP:data.rates.GBP||0.79};
-    const stored=getStoredRates();
-    const merged={...rates};
-    if(stored.manualOverrides){Object.entries(stored.manualOverrides).forEach(([k,v])=>{merged[k]=v;});}
-    const newData={...stored,rates:merged,base:'USD',updated:new Date().toISOString()};
-    saveRates(newData);
-    return newData;
-  }catch(e){console.warn('Rate fetch failed:',e);return getStoredRates();}
+    console.log('Rates from open.er-api - EGP:',data.rates.EGP);
+    return applyRates({SAR:data.rates.SAR,EGP:data.rates.EGP,EUR:data.rates.EUR,GBP:data.rates.GBP});
+  }catch(e3){console.warn('All rate sources failed:',e3);}
+  return getStoredRates();
 }
 function convertAmount(amount,fromCur,toCur,rates){
   if(fromCur===toCur||!amount)return amount;
@@ -2339,7 +2368,8 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
   const baseCurInfo=CURRENCIES.find(c=>c.code===baseCur)||CURRENCIES[0];
 
   // Auto-fetch rates on first load if never fetched
-  useEffect(()=>{if(!rateData.updated){fetchLiveRates().then(d=>setRateData(d));}},[]);
+  useEffect(()=>{const stale=!rateData.updated||((Date.now()-new Date(rateData.updated).getTime())>12*60*60*1000);if(stale){fetchLiveRates().then(d=>setRateData(d));}},[]);
+  useEffect(()=>{const iv=setInterval(()=>{fetchLiveRates().then(d=>{setRateData(d);});},60*60*1000);return()=>clearInterval(iv);},[]);
   useEffect(()=>{if(editPending){setExpModal({...editPending,txType:editPending.txType||'expense'});if(onEditPendingDone)onEditPendingDone();}},[editPending]);
 
   const refreshRates=useCallback(async()=>{setRateLoading(true);const d=await fetchLiveRates();setRateData(d);setRateLoading(false);toast(T('تم تحديث الأسعار 💱','Rates updated 💱',language));},[toast,language]);
@@ -2559,19 +2589,41 @@ function Expenses({data,language,onSaveExpense,onDeleteExpense,onSaveCategory,on
       </div>);})}
 
       <div style={{marginTop:14,borderTop:'1px solid var(--border)',paddingTop:14}}>
-        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}><h3 style={{fontSize:14,fontWeight:800}}>💱 {T('العملات وأسعار الصرف','Currency & Rates',language)}</h3><button className="btn btn-ghost btn-xs" onClick={refreshRates} disabled={rateLoading}>{rateLoading?'⏳':'🔄'} {T('تحديث','Refresh',language)}</button></div>
+        <div style={{display:'flex',justifyContent:'space-between',alignItems:'center',marginBottom:10}}><h3 style={{fontSize:14,fontWeight:800}}>💱 {T('العملات وأسعار الصرف','Currency & Rates',language)}</h3><span style={{fontSize:11,color:'var(--text2)',marginLeft:8,marginRight:8}}>{rateData.updated?T('آخر تحديث: ','Updated: ',language)+new Date(rateData.updated).toLocaleTimeString(language==='ar'?'ar-SA':'en-US',{hour:'2-digit',minute:'2-digit'}):''}</span>{Object.keys(rateData.manualOverrides||{}).length>0&&<button className="btn btn-ghost btn-xs" style={{color:'var(--coral)'}} onClick={async()=>{const d={...rateData,manualOverrides:{}};saveRates(d);setRateData(d);setRateLoading(true);const nd=await fetchLiveRates();setRateData(nd);setRateLoading(false);toast(T('تم مسح التعديلات وتحديث الأسعار ✅','Overrides cleared & rates updated ✅',language));}}>✕ {T('مسح التعديلات','Clear Overrides',language)}</button>}<button className="btn btn-ghost btn-xs" onClick={refreshRates} disabled={rateLoading}>{rateLoading?'⏳':'🔄'} {T('تحديث','Refresh',language)}</button></div>
         <div style={{marginBottom:10}}><label style={{fontSize:12,fontWeight:700,color:'var(--text2)',marginBottom:4,display:'block'}}>{T('العملة الأساسية','Base Currency',language)}</label>
           <div style={{display:'flex',gap:6,flexWrap:'wrap'}}>{CURRENCIES.map(c=>(<div key={c.code} onClick={()=>setBaseCurrency(c.code)} style={{padding:'6px 12px',borderRadius:10,fontSize:12,fontWeight:700,cursor:'pointer',border:`2px solid ${baseCur===c.code?'var(--teal)':'var(--border)'}`,background:baseCur===c.code?'var(--teal-g)':'transparent',color:baseCur===c.code?'var(--teal)':'var(--text2)'}}>{c.icon} {c.code}</div>))}</div>
         </div>
-        <div style={{display:'flex',flexDirection:'column',gap:6}}>
-          {CURRENCIES.filter(c=>c.code!==baseCur).map(c=>{const isManual=rateData.manualOverrides?.[c.code]!==undefined;return(
-            <div key={c.code} style={{display:'flex',alignItems:'center',gap:8,padding:'6px 10px',borderRadius:10,background:'var(--bg3)',fontSize:12}}>
-              <span style={{width:30}}>{c.icon}</span>
-              <span style={{fontWeight:700,width:40}}>{c.code}</span>
-              <span style={{color:'var(--text2)',flex:1}}>1 {baseCur} =</span>
-              <input type="number" step="0.01" value={(rates[c.code]/rates[baseCur]).toFixed(4)} onChange={e=>{const v=parseFloat(e.target.value);if(v>0){const newRate=v*rates[baseCur];setManualRate(c.code,newRate);}}} style={{width:80,padding:'4px 6px',borderRadius:6,border:'1px solid var(--border)',background:'var(--bg2)',color:'var(--text)',fontSize:12,fontWeight:700,textAlign:'center'}}/>
-              <span style={{fontSize:10,fontWeight:600,color:isManual?'var(--gold)':'var(--lime)'}}>{isManual?T('يدوي','Manual',language):T('تلقائي','Auto',language)}</span>
-              {isManual&&<span style={{cursor:'pointer',fontSize:10}} onClick={()=>clearManualRate(c.code)}>↩️</span>}
+        <div style={{display:'flex',flexDirection:'column',gap:8}}>
+          {CURRENCIES.filter(c=>c.code!==baseCur).map(c=>{
+            const isManual=rateData.manualOverrides?.[c.code]!==undefined;
+            const displayRate=(rates[c.code]/rates[baseCur]);
+            return(
+            <div key={c.code} style={{borderRadius:12,background:'var(--bg3)',border:`2px solid ${isManual?'var(--gold)':'var(--border)'}`,overflow:'hidden'}}>
+              {/* Header row */}
+              <div style={{display:'flex',alignItems:'center',gap:8,padding:'8px 12px'}}>
+                <span style={{fontSize:20}}>{c.icon}</span>
+                <div style={{flex:1}}>
+                  <div style={{fontWeight:800,fontSize:13}}>{c.code}</div>
+                  <div style={{fontSize:10,color:'var(--text2)'}}>1 {baseCur} = <strong style={{color:isManual?'var(--gold)':'var(--teal)'}}>{displayRate.toFixed(2)}</strong> {c.code}</div>
+                </div>
+                <span style={{fontSize:10,fontWeight:700,padding:'3px 8px',borderRadius:8,background:isManual?'var(--gold-g)':'var(--teal-g)',color:isManual?'var(--gold)':'var(--teal)'}}>
+                  {isManual?'✏️ '+T('يدوي','Manual',language):'🤖 '+T('تلقائي','Auto',language)}
+                </span>
+              </div>
+              {/* Manual input row */}
+              <div style={{display:'flex',alignItems:'center',gap:6,padding:'0 12px 10px',borderTop:'1px solid var(--border)'}}>
+                <span style={{fontSize:11,color:'var(--text2)',flexShrink:0}}>1 {baseCur} =</span>
+                <input type="number" step="0.01" min="0.0001"
+                  defaultValue={displayRate.toFixed(4)}
+                  key={c.code+'-'+displayRate.toFixed(4)}
+                  onBlur={e=>{const v=parseFloat(e.target.value);if(v>0&&Math.abs(v-displayRate)>0.0001){const newRate=v*rates[baseCur];setManualRate(c.code,newRate);toast(T(`تم حفظ سعر ${c.code} = ${v}`+' ✅',`${c.code} rate saved = ${v} ✅`,language));}}}
+                  onKeyDown={e=>{if(e.key==='Enter'){const v=parseFloat(e.target.value);if(v>0){const newRate=v*rates[baseCur];setManualRate(c.code,newRate);toast(T(`تم حفظ سعر ${c.code} = ${v}`+' ✅',`${c.code} rate saved = ${v} ✅`,language));e.target.blur();}}}}
+                  style={{flex:1,padding:'7px 10px',borderRadius:8,border:`1px solid ${isManual?'var(--gold)':'var(--border)'}`,background:'var(--bg2)',color:'var(--text)',fontSize:14,fontWeight:800,textAlign:'center',fontFamily:'inherit'}}
+                  placeholder={displayRate.toFixed(4)}/>
+                <span style={{fontSize:11,color:'var(--text2)',flexShrink:0}}>{c.code}</span>
+                {isManual&&<button onClick={()=>{clearManualRate(c.code);toast(T(`تم استعادة سعر ${c.code} التلقائي 🔄`,`${c.code} reset to auto 🔄`,language));}} style={{background:'var(--coral-g)',border:'1px solid var(--coral)',borderRadius:8,color:'var(--coral)',fontSize:11,fontWeight:700,padding:'5px 10px',cursor:'pointer',flexShrink:0}}>↩️</button>}
+              </div>
+              <div style={{fontSize:10,color:'var(--text2)',padding:'0 12px 8px'}}>{T('اكتب السعر واضغط Enter أو انقر خارجه للحفظ','Type rate and press Enter or click outside to save',language)}</div>
             </div>);})}
         </div>
         {rateData.updated&&<div style={{fontSize:10,color:'var(--text2)',marginTop:6,textAlign:'center'}}>✅ {T('آخر تحديث: ','Last update: ',language)}{new Date(rateData.updated).toLocaleDateString(language==='ar'?'ar-SA':'en-US',{day:'numeric',month:'short',hour:'2-digit',minute:'2-digit'})}</div>}
